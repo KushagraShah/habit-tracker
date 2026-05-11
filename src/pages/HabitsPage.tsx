@@ -10,14 +10,8 @@ import type { Habit, RecurrenceDay } from '../types';
 import { DAYS_OF_WEEK } from '../types';
 
 const COLORS = [
-  '#4f46e5', // indigo
-  '#059669', // emerald
-  '#d97706', // amber
-  '#dc2626', // red
-  '#7c3aed', // violet
-  '#0891b2', // cyan
-  '#db2777', // pink
-  '#2563eb', // blue
+  '#4f46e5', '#059669', '#d97706', '#dc2626',
+  '#7c3aed', '#0891b2', '#db2777', '#2563eb',
 ];
 
 export default function HabitsPage() {
@@ -31,6 +25,9 @@ export default function HabitsPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [successCriteria, setSuccessCriteria] = useState('');
+  const [successLabel, setSuccessLabel] = useState('');
+  const [partialLabel, setPartialLabel] = useState('');
+  const [failLabel, setFailLabel] = useState('');
   const [selectedDays, setSelectedDays] = useState<RecurrenceDay[]>([]);
   const [color, setColor] = useState(COLORS[0]);
 
@@ -56,6 +53,9 @@ export default function HabitsPage() {
     setTitle('');
     setDescription('');
     setSuccessCriteria('');
+    setSuccessLabel('');
+    setPartialLabel('');
+    setFailLabel('');
     setSelectedDays([]);
     setColor(COLORS[0]);
     setEditingHabit(null);
@@ -66,6 +66,9 @@ export default function HabitsPage() {
     setTitle(habit.title);
     setDescription(habit.description || '');
     setSuccessCriteria(habit.success_criteria || '');
+    setSuccessLabel(habit.success_label || '');
+    setPartialLabel(habit.partial_label || '');
+    setFailLabel(habit.fail_label || '');
     setSelectedDays(habit.recurrence);
     setColor(habit.color);
     setEditingHabit(habit);
@@ -89,6 +92,9 @@ export default function HabitsPage() {
       description: description || null,
       recurrence: selectedDays,
       success_criteria: successCriteria || null,
+      success_label: successLabel || null,
+      partial_label: partialLabel || null,
+      fail_label: failLabel || null,
       color,
       sort_order: 0,
       is_active: true,
@@ -147,10 +153,7 @@ export default function HabitsPage() {
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold text-gray-800">My Habits</h2>
         <button
-          onClick={() => {
-            resetForm();
-            setShowForm(true);
-          }}
+          onClick={() => { resetForm(); setShowForm(true); }}
           className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
         >
           + New Habit
@@ -164,11 +167,9 @@ export default function HabitsPage() {
             <h3 className="text-lg font-bold text-gray-800 mb-4">
               {editingHabit ? 'Edit Habit' : 'New Habit'}
             </h3>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Title
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
                 <input
                   type="text"
                   required
@@ -180,29 +181,64 @@ export default function HabitsPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Description (optional)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                 <input
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                  placeholder="e.g. Morning workout at 7am"
+                  placeholder="(optional) e.g. Morning workout at 7am"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Success Criteria (optional)
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Success Criteria</label>
                 <input
                   type="text"
                   value={successCriteria}
                   onChange={(e) => setSuccessCriteria(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                  placeholder="e.g. At least 30 min of exercise"
+                  placeholder="(optional) e.g. At least 30 min of exercise"
                 />
+              </div>
+
+              <div className="border-t border-gray-100 pt-3">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Custom Button Labels (optional)
+                </label>
+                <p className="text-xs text-gray-400 mb-2">These will replace the default ✅/🟡/❌ buttons on the Today page</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="block text-xs text-green-600 mb-1">Success label</label>
+                    <input
+                      type="text"
+                      value={successLabel}
+                      onChange={(e) => setSuccessLabel(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      placeholder="e.g. Good workout"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-yellow-600 mb-1">Partial label</label>
+                    <input
+                      type="text"
+                      value={partialLabel}
+                      onChange={(e) => setPartialLabel(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      placeholder="(optional)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-red-600 mb-1">Fail label</label>
+                    <input
+                      type="text"
+                      value={failLabel}
+                      onChange={(e) => setFailLabel(e.target.value)}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                      placeholder="e.g. Skipped"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -226,16 +262,12 @@ export default function HabitsPage() {
                   ))}
                 </div>
                 {selectedDays.length === 0 && (
-                  <p className="text-xs text-red-400 mt-1">
-                    Select at least one day
-                  </p>
+                  <p className="text-xs text-red-400 mt-1">Select at least one day</p>
                 )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Color
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Color</label>
                 <div className="flex gap-2">
                   {COLORS.map((c) => (
                     <button
@@ -280,9 +312,7 @@ export default function HabitsPage() {
       ) : habits.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-gray-400 text-lg mb-2">No habits yet</p>
-          <p className="text-gray-400 text-sm">
-            Create your first habit to get started!
-          </p>
+          <p className="text-gray-400 text-sm">Create your first habit to get started!</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -299,31 +329,53 @@ export default function HabitsPage() {
                   style={{ backgroundColor: habit.color }}
                 />
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-800 truncate">
-                    {habit.title}
-                  </h3>
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-gray-800 truncate">{habit.title}</h3>
+                    {/* Active/Inactive badge */}
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        habit.is_active
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-400'
+                      }`}
+                    >
+                      {habit.is_active ? 'Active' : 'Paused'}
+                    </span>
+                  </div>
                   <p className="text-xs text-gray-400">
                     {formatRecurrence(habit.recurrence)}
                     {habit.success_criteria && ` · ${habit.success_criteria}`}
                   </p>
+                  {/* Show custom labels if set */}
+                  {(habit.success_label || habit.partial_label || habit.fail_label) && (
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Labels: {habit.success_label || '✅'} / {habit.partial_label || '🟡'} / {habit.fail_label || '❌'}
+                    </p>
+                  )}
                 </div>
-                <div className="flex gap-1">
+                <div className="flex items-center gap-0.5">
                   <button
                     onClick={() => handleToggleActive(habit)}
-                    className="p-2 text-xs text-gray-400 hover:text-gray-600"
-                    title={habit.is_active ? 'Disable' : 'Enable'}
+                    className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                      habit.is_active
+                        ? 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                        : 'bg-green-100 text-green-600 hover:bg-green-200'
+                    }`}
+                    title={habit.is_active ? 'Pause habit' : 'Activate habit'}
                   >
-                    {habit.is_active ? '🟢' : '⚪'}
+                    {habit.is_active ? 'Pause' : 'Resume'}
                   </button>
                   <button
                     onClick={() => openEdit(habit)}
                     className="p-2 text-sm text-gray-400 hover:text-gray-600"
+                    title="Edit"
                   >
                     ✏️
                   </button>
                   <button
                     onClick={() => handleDelete(habit.id)}
                     className="p-2 text-sm text-gray-400 hover:text-red-500"
+                    title="Delete"
                   >
                     🗑️
                   </button>

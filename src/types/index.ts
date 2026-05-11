@@ -5,6 +5,9 @@ export interface Habit {
   description: string | null;
   recurrence: RecurrenceDay[];
   success_criteria: string | null;
+  success_label: string | null;
+  partial_label: string | null;
+  fail_label: string | null;
   color: string;
   sort_order: number;
   is_active: boolean;
@@ -36,8 +39,10 @@ export const DAYS_OF_WEEK: RecurrenceDay[] = [
   'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
 ];
 
-export const STATUS_LABELS: Record<HabitStatus, string> = {
-  success: '✅ Done',
-  partial: '🟡 Partial',
-  fail: '❌ Missed',
-};
+export interface DayScore {
+  total: number;
+  achieved: number;
+  maxScore: number;
+  percent: number;
+  status: 'success' | 'partial' | 'fail' | 'none';
+}
