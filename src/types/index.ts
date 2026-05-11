@@ -3,12 +3,11 @@ export interface Habit {
   user_id: string;
   title: string;
   description: string | null;
+  emoji: string;
   recurrence: RecurrenceDay[];
-  success_criteria: string | null;
   success_label: string | null;
   partial_label: string | null;
   fail_label: string | null;
-  color: string;
   sort_order: number;
   is_active: boolean;
   created_at: string;
@@ -31,10 +30,6 @@ export interface HabitLog {
   updated_at: string;
 }
 
-export interface HabitWithLog extends Habit {
-  todayLog?: HabitLog | null;
-}
-
 export const DAYS_OF_WEEK: RecurrenceDay[] = [
   'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
 ];
@@ -46,3 +41,9 @@ export interface DayScore {
   percent: number;
   status: 'success' | 'partial' | 'fail' | 'none';
 }
+
+export const EMOJIS = [
+  '💪', '🏃', '📚', '🎯', '🧘', '🎨', '✍️', '🏋️',
+  '🚴', '🧠', '🌱', '💧', '🥗', '😴', '☀️', '🎵',
+  '📝', '🧹', '💻', '📖', '🎮', '🧭', '🎭', '🌍',
+];

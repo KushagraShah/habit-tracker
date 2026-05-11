@@ -17,7 +17,7 @@ import { computeDayScore, computeStreak } from '../utils/scoring';
 import type { Habit, HabitLog } from '../types';
 
 export default function CalendarPage() {
-  const { user } = useAuth();
+  const { user, signupDate } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logs, setLogs] = useState<HabitLog[]>([]);
@@ -26,8 +26,9 @@ export default function CalendarPage() {
   const today = new Date();
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
-  const calStart = startOfWeek(monthStart);
-  const calEnd = endOfWeek(monthEnd);
+  // Use weekStartsOn: 1 for Monday
+  const calStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+  const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
   const days = eachDayOfInterval({ start: calStart, end: calEnd });
 
   useEffect(() => {
@@ -42,7 +43,7 @@ export default function CalendarPage() {
       const startStr = format(calStart, 'yyyy-MM-dd');
       const endStr = format(calEnd, 'yyyy-MM-dd');
 
-      // Also fetch logs going back ~60 days for streak calculation
+      // Fetch extra logs for streak calculation
       const streakStart = subMonths(new Date(), 2);
       const streakStartStr = format(streakStart, 'yyyy-MM-dd');
 
@@ -61,10 +62,10 @@ export default function CalendarPage() {
   };
 
   const getDayScore = (date: Date) => {
-    return computeDayScore(habits, logs, date, today);
+    return computeDayScore(habits, logs, date, today, signupDate);
   };
 
-  const streak = computeStreak(habits, logs, today);
+  const streak = computeStreak(habits, logs, today, signupDate);
 
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
   const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
@@ -103,7 +104,7 @@ export default function CalendarPage() {
         </div>
       ) : (
         <>
-          {/* Day headers */}
+          {/* Day headers - Monday first */}
           <div className="grid grid-cols-7 mb-2">
             {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
               <div
@@ -119,7 +120,7 @@ export default function CalendarPage() {
           <div className="grid grid-cols-7 gap-1">
             {days.map((day) => {
               const score = getDayScore(day);
-              const isToday = isSameDay(day, today);
+              const isDayToday = isSameDay(day, today);
               const isCurrent = isSameMonth(day, currentDate);
 
               let bgColor = 'bg-gray-50';
@@ -133,10 +134,14 @@ export default function CalendarPage() {
                   className={`
                     aspect-square rounded-lg p-1 flex flex-col items-center justify-center
                     ${isCurrent ? bgColor : 'bg-gray-50 opacity-40'}
-                    ${isToday ? 'ring-2 ring-indigo-400' : ''}
+                    ${isDayToday ? 'ring-2 ring-indigo-400' : ''}
                   `}
                 >
-                  <span className="text-xs font-medium text-gray-600">
+                  <span className={`text-xs font-medium ${
+                    score.status === 'fail' ? 'text-red-600' :
+                    score.status === 'success' ? 'text-green-700' :
+                    'text-gray-600'
+                  }`}>
                     {format(day, 'd')}
                   </span>
                   {score.status !== 'none' && (
@@ -144,9 +149,9 @@ export default function CalendarPage() {
                       {habits
                         .filter((h) => isHabitDueOnDate(h, day))
                         .map((h) => {
-                          const dateStr = format(day, 'yyyy-MM-dd');
+                          const ds = format(day, 'yyyy-MM-dd');
                           const log = logs.find(
-                            (l) => l.habit_id === h.id && l.log_date === dateStr
+                            (l) => l.habit_id === h.id && l.log_date === ds
                           );
                           return (
                             <div
@@ -173,16 +178,13 @@ export default function CalendarPage() {
           {/* Legend */}
           <div className="flex gap-4 mt-6 text-xs text-gray-500 justify-center">
             <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded bg-green-100" /> All success
+              <span className="w-3 h-3 rounded bg-green-100" /> Success
             </span>
             <span className="flex items-center gap-1">
               <span className="w-3 h-3 rounded bg-yellow-100" /> Partial
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded bg-red-100" /> Any failed
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded bg-gray-50 border" /> No habits due
+              <span className="w-3 h-3 rounded bg-red-100" /> Failed
             </span>
           </div>
         </>

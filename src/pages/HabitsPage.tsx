@@ -7,12 +7,7 @@ import {
   deleteHabit,
 } from '../lib/habits';
 import type { Habit, RecurrenceDay } from '../types';
-import { DAYS_OF_WEEK } from '../types';
-
-const COLORS = [
-  '#4f46e5', '#059669', '#d97706', '#dc2626',
-  '#7c3aed', '#0891b2', '#db2777', '#2563eb',
-];
+import { DAYS_OF_WEEK, EMOJIS } from '../types';
 
 export default function HabitsPage() {
   const { user } = useAuth();
@@ -24,12 +19,11 @@ export default function HabitsPage() {
   // Form state
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [successCriteria, setSuccessCriteria] = useState('');
+  const [emoji, setEmoji] = useState(EMOJIS[0]);
   const [successLabel, setSuccessLabel] = useState('');
   const [partialLabel, setPartialLabel] = useState('');
   const [failLabel, setFailLabel] = useState('');
   const [selectedDays, setSelectedDays] = useState<RecurrenceDay[]>([]);
-  const [color, setColor] = useState(COLORS[0]);
 
   useEffect(() => {
     if (!user) return;
@@ -52,12 +46,11 @@ export default function HabitsPage() {
   const resetForm = () => {
     setTitle('');
     setDescription('');
-    setSuccessCriteria('');
+    setEmoji(EMOJIS[0]);
     setSuccessLabel('');
     setPartialLabel('');
     setFailLabel('');
     setSelectedDays([]);
-    setColor(COLORS[0]);
     setEditingHabit(null);
     setShowForm(false);
   };
@@ -65,12 +58,11 @@ export default function HabitsPage() {
   const openEdit = (habit: Habit) => {
     setTitle(habit.title);
     setDescription(habit.description || '');
-    setSuccessCriteria(habit.success_criteria || '');
+    setEmoji(habit.emoji || EMOJIS[0]);
     setSuccessLabel(habit.success_label || '');
     setPartialLabel(habit.partial_label || '');
     setFailLabel(habit.fail_label || '');
     setSelectedDays(habit.recurrence);
-    setColor(habit.color);
     setEditingHabit(habit);
     setShowForm(true);
   };
@@ -90,12 +82,11 @@ export default function HabitsPage() {
       user_id: user.id,
       title,
       description: description || null,
+      emoji,
       recurrence: selectedDays,
-      success_criteria: successCriteria || null,
       success_label: successLabel || null,
       partial_label: partialLabel || null,
       fail_label: failLabel || null,
-      color,
       sort_order: 0,
       is_active: true,
     };
@@ -168,16 +159,35 @@ export default function HabitsPage() {
               {editingHabit ? 'Edit Habit' : 'New Habit'}
             </h3>
             <form onSubmit={handleSubmit} className="space-y-3">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
-                <input
-                  type="text"
-                  required
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                  placeholder="e.g. Go to the gym"
-                />
+              {/* Emoji picker + Title */}
+              <div className="flex gap-2 items-start">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Icon</label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = EMOJIS.indexOf(emoji);
+                        setEmoji(EMOJIS[(current + 1) % EMOJIS.length]);
+                      }}
+                      className="text-2xl w-14 h-[42px] flex items-center justify-center border border-gray-300 rounded-lg hover:bg-gray-50"
+                      title="Click to change emoji"
+                    >
+                      {emoji}
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                    placeholder="e.g. Go to the gym"
+                  />
+                </div>
               </div>
 
               <div>
@@ -187,29 +197,19 @@ export default function HabitsPage() {
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                  placeholder="(optional) e.g. Morning workout at 7am"
+                  placeholder="(optional)"
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Success Criteria</label>
-                <input
-                  type="text"
-                  value={successCriteria}
-                  onChange={(e) => setSuccessCriteria(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                  placeholder="(optional) e.g. At least 30 min of exercise"
-                />
-              </div>
-
+              {/* Custom Labels */}
               <div className="border-t border-gray-100 pt-3">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Custom Button Labels (optional)
+                  Button Labels (optional)
                 </label>
-                <p className="text-xs text-gray-400 mb-2">These will replace the default ✅/🟡/❌ buttons on the Today page</p>
+                <p className="text-xs text-gray-400 mb-2">Custom text for the action buttons on the Today page</p>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="block text-xs text-green-600 mb-1">Success label</label>
+                    <label className="block text-xs text-green-600 mb-1">Success</label>
                     <input
                       type="text"
                       value={successLabel}
@@ -219,7 +219,7 @@ export default function HabitsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-yellow-600 mb-1">Partial label</label>
+                    <label className="block text-xs text-yellow-600 mb-1">Partial</label>
                     <input
                       type="text"
                       value={partialLabel}
@@ -229,7 +229,7 @@ export default function HabitsPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-red-600 mb-1">Fail label</label>
+                    <label className="block text-xs text-red-600 mb-1">Fail</label>
                     <input
                       type="text"
                       value={failLabel}
@@ -243,7 +243,7 @@ export default function HabitsPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Recurrence (select days)
+                  Recurrence (days)
                 </label>
                 <div className="flex gap-1 flex-wrap">
                   {DAYS_OF_WEEK.map((day) => (
@@ -264,23 +264,6 @@ export default function HabitsPage() {
                 {selectedDays.length === 0 && (
                   <p className="text-xs text-red-400 mt-1">Select at least one day</p>
                 )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Color</label>
-                <div className="flex gap-2">
-                  {COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setColor(c)}
-                      className={`w-8 h-8 rounded-full ${
-                        color === c ? 'ring-2 ring-offset-2 ring-indigo-400' : ''
-                      }`}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
               </div>
 
               <div className="flex gap-3 pt-2">
@@ -324,14 +307,10 @@ export default function HabitsPage() {
               }`}
             >
               <div className="flex items-center gap-3">
-                <div
-                  className="w-3 h-3 rounded-full shrink-0"
-                  style={{ backgroundColor: habit.color }}
-                />
+                <span className="text-2xl">{habit.emoji || '📋'}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-gray-800 truncate">{habit.title}</h3>
-                    {/* Active/Inactive badge */}
                     <span
                       className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         habit.is_active
@@ -344,9 +323,7 @@ export default function HabitsPage() {
                   </div>
                   <p className="text-xs text-gray-400">
                     {formatRecurrence(habit.recurrence)}
-                    {habit.success_criteria && ` · ${habit.success_criteria}`}
                   </p>
-                  {/* Show custom labels if set */}
                   {(habit.success_label || habit.partial_label || habit.fail_label) && (
                     <p className="text-xs text-gray-400 mt-0.5">
                       Labels: {habit.success_label || '✅'} / {habit.partial_label || '🟡'} / {habit.fail_label || '❌'}
@@ -361,24 +338,11 @@ export default function HabitsPage() {
                         ? 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                         : 'bg-green-100 text-green-600 hover:bg-green-200'
                     }`}
-                    title={habit.is_active ? 'Pause habit' : 'Activate habit'}
                   >
                     {habit.is_active ? 'Pause' : 'Resume'}
                   </button>
-                  <button
-                    onClick={() => openEdit(habit)}
-                    className="p-2 text-sm text-gray-400 hover:text-gray-600"
-                    title="Edit"
-                  >
-                    ✏️
-                  </button>
-                  <button
-                    onClick={() => handleDelete(habit.id)}
-                    className="p-2 text-sm text-gray-400 hover:text-red-500"
-                    title="Delete"
-                  >
-                    🗑️
-                  </button>
+                  <button onClick={() => openEdit(habit)} className="p-2 text-sm text-gray-400 hover:text-gray-600" title="Edit">✏️</button>
+                  <button onClick={() => handleDelete(habit.id)} className="p-2 text-sm text-gray-400 hover:text-red-500" title="Delete">🗑️</button>
                 </div>
               </div>
             </div>

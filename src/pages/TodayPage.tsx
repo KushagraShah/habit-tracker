@@ -5,8 +5,10 @@ import { computeDayScore } from '../utils/scoring';
 import type { Habit, HabitLog } from '../types';
 import { format, addDays, subDays } from 'date-fns';
 
+const DAYS_IN_BAR = 7;
+
 export default function TodayPage() {
-  const { user } = useAuth();
+  const { user, signupDate } = useAuth();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logs, setLogs] = useState<HabitLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -14,7 +16,6 @@ export default function TodayPage() {
   const [showPastWarning, setShowPastWarning] = useState(false);
 
   const today = new Date();
-  const isToday = format(viewDate, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
   const isPast = viewDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const dateStr = format(viewDate, 'yyyy-MM-dd');
 
@@ -56,76 +57,83 @@ export default function TodayPage() {
   };
 
   const goToPrevDay = () => setViewDate(subDays(viewDate, 1));
-  const goToNextDay = () => {
-    if (isPast || isToday) return; // can't go past today
-    setViewDate(addDays(viewDate, 1));
-  };
-  const goToToday = () => {
-    setViewDate(today);
+  const goToNextDay = () => setViewDate(addDays(viewDate, 1));
+  const goToDate = (date: Date) => {
+    setViewDate(date);
     setShowPastWarning(false);
   };
 
-  const dayScore = computeDayScore(habits, logs, viewDate, today);
+  const dayScore = computeDayScore(habits, logs, viewDate, today, signupDate);
 
-  const viewDateName = format(viewDate, 'EEEE, MMMM d');
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-gray-400">Loading...</p>
-      </div>
-    );
-  }
+  // Generate the day bar: centered on viewDate, showing DAYS_IN_BAR days
+  const barDays = Array.from({ length: DAYS_IN_BAR }, (_, i) => {
+    const offset = i - Math.floor(DAYS_IN_BAR / 2);
+    return addDays(viewDate, offset);
+  });
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
-      {/* Date navigation bar */}
-      <div className="flex items-center justify-between mb-2">
+    <div className="max-w-2xl mx-auto px-4 py-4">
+      {/* Day bar - airline booking style */}
+      <div className="flex items-center gap-1 mb-4">
         <button
           onClick={goToPrevDay}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors text-gray-500"
+          className="p-3 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 text-xl shrink-0"
         >
           ←
         </button>
-        <div className="text-center">
-          <h2 className="text-lg font-bold text-gray-800">
-            {isToday ? 'Today' : viewDateName}
-          </h2>
-          <p className="text-xs text-gray-400">
-            {!isToday && (
-              <button onClick={goToToday} className="text-indigo-500 hover:underline">
-                Back to today
+
+        <div className="flex-1 flex gap-1 overflow-x-auto scrollbar-hide justify-center">
+          {barDays.map((day) => {
+            const isActive = format(day, 'yyyy-MM-dd') === format(viewDate, 'yyyy-MM-dd');
+            const isDayToday = format(day, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
+            const dayStr = format(day, 'EEE');
+            const dateStr_ = format(day, 'd');
+            return (
+              <button
+                key={day.toISOString()}
+                onClick={() => goToDate(day)}
+                className={`flex flex-col items-center px-3 py-2 rounded-lg min-w-0 transition-colors ${
+                  isActive
+                    ? 'bg-indigo-100 text-indigo-700 font-semibold'
+                    : 'hover:bg-gray-100 text-gray-500'
+                }`}
+              >
+                <span className="text-xs">{dayStr}</span>
+                <span className={`text-sm ${isDayToday ? 'font-bold' : ''}`}>{dateStr_}</span>
               </button>
-            )}
-          </p>
+            );
+          })}
         </div>
+
         <button
           onClick={goToNextDay}
-          disabled={!isPast && !isToday}
-          className={`p-2 rounded-lg transition-colors ${
-            !isPast && !isToday
-              ? 'text-gray-200 cursor-not-allowed'
-              : 'hover:bg-gray-100 text-gray-500'
-          }`}
+          className="p-3 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 text-xl shrink-0"
         >
           →
         </button>
       </div>
 
-      {/* Day score */}
+      {/* Progress bar */}
       {dayScore.status !== 'none' && (
-        <div className={`text-center mb-4 px-4 py-2 rounded-lg text-sm font-medium ${
-          dayScore.status === 'success' ? 'bg-green-50 text-green-700' :
-          dayScore.status === 'partial' ? 'bg-yellow-50 text-yellow-700' :
-          dayScore.status === 'fail' ? 'bg-red-50 text-red-700' :
-          'bg-gray-50 text-gray-500'
-        }`}>
-          {dayScore.status === 'success' && '✅ Great day! All habits done'}
-          {dayScore.status === 'partial' && `🟡 Partial day — ${Math.round(dayScore.percent)}% completed`}
-          {dayScore.status === 'fail' && `❌ Missed — ${Math.round(dayScore.percent)}% completed`}
-          <span className="text-xs ml-2">
-            ({Math.round(dayScore.achieved * 2)}/{dayScore.total} pts)
-          </span>
+        <div className="mb-4">
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <span>
+              {dayScore.status === 'success' && '✅ All done'}
+              {dayScore.status === 'partial' && '🟡 Partial'}
+              {dayScore.status === 'fail' && '❌ Missed'}
+            </span>
+            <span>{Math.round(dayScore.percent)}%</span>
+          </div>
+          <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                dayScore.status === 'success' ? 'bg-green-500' :
+                dayScore.status === 'partial' ? 'bg-yellow-500' :
+                'bg-red-500'
+              }`}
+              style={{ width: `${Math.min(dayScore.percent, 100)}%` }}
+            />
+          </div>
         </div>
       )}
 
@@ -136,7 +144,12 @@ export default function TodayPage() {
         </div>
       )}
 
-      {dueHabits.length === 0 ? (
+      {/* Habits list */}
+      {loading ? (
+        <div className="flex items-center justify-center h-32">
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      ) : dueHabits.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-gray-400 text-lg mb-2">Nothing due this day 🎉</p>
           <p className="text-gray-400 text-sm">
@@ -153,17 +166,14 @@ export default function TodayPage() {
                 className="bg-white rounded-xl shadow-sm border border-gray-100 p-4"
               >
                 <div className="flex items-center gap-3 mb-3">
-                  <div
-                    className="w-3 h-3 rounded-full shrink-0"
-                    style={{ backgroundColor: habit.color }}
-                  />
+                  <span className="text-2xl">{habit.emoji || '📋'}</span>
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-800 truncate">
                       {habit.title}
                     </h3>
-                    {habit.success_criteria && (
+                    {habit.description && (
                       <p className="text-xs text-gray-400 truncate">
-                        {habit.success_criteria}
+                        {habit.description}
                       </p>
                     )}
                   </div>
@@ -182,7 +192,6 @@ export default function TodayPage() {
                         : 'bg-red-100 text-red-700 ring-2 ring-red-400'
                       : 'bg-gray-50 text-gray-500 hover:bg-gray-100';
 
-                    // Use custom labels if defined, fallback to defaults
                     const label =
                       status === 'success'
                         ? habit.success_label || '✅ Done'
