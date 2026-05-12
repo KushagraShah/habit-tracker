@@ -1,5 +1,6 @@
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
 import AuthPage from './pages/AuthPage';
 import TodayPage from './pages/TodayPage';
@@ -34,6 +35,7 @@ function AppRoutes() {
         }
       >
         <Route path="/today" element={<TodayPage />} />
+        <Route path="/today/:date" element={<TodayPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/habits" element={<HabitsPage />} />
       </Route>
@@ -45,9 +47,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <HashRouter>
-      <AuthProvider>
-        <AppRoutes />
-      </AuthProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppRoutes />
+        </AuthProvider>
+      </ThemeProvider>
     </HashRouter>
   );
 }

@@ -8,6 +8,8 @@ export interface Habit {
   success_label: string | null;
   partial_label: string | null;
   fail_label: string | null;
+  start_date: string;
+  end_date: string;
   sort_order: number;
   is_active: boolean;
   created_at: string;
@@ -39,12 +41,7 @@ export interface DayScore {
   achieved: number;
   maxScore: number;
   percent: number;
-  status: 'success' | 'partial' | 'fail' | 'none' | 'no_habits';
+  status: 'success' | 'partial' | 'fail' | 'none' | 'no_habits' | 'before_habits' | 'future';
 }
 
-export const EMOJIS = [
-  '💪', '🏃', '📚', '🎯', '🧘', '🎨', '✍️', '🏋️',
-  '🚴', '🧠', '🌱', '💧', '🥗', '😴', '☀️', '🎵',
-  '📝', '🧹', '💻', '📖', '🎮', '🧭', '🎭', '🌍',
-  '🐶', '🐱', '🌸', '🍳', '🎧', '📷', '✈️', '🏡',
-];
+export type Theme = 'light' | 'dark';

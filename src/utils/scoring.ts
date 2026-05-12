@@ -6,17 +6,13 @@ function getDateOnly(d: Date): Date {
 }
 
 /**
- * Scoring rules:
- * - success = 1pt, partial = 0.5pt, fail = 0pt
- * - A habit only "exists" for scoring from its created_at date onward
- * - Unlogged past dates are NOT auto-failed — we only score what was logged
- * - Future dates are ignored entirely
- * - Day status:
- *   'no_habits': day has no habits due (or all habits didn't exist yet) — shown as neutral/green
- *   'success': all due-and-existing habits were logged as success
- *   'partial': mix of success/partial (or some unlogged past)
- *   'fail': any logged as fail
- *   'none': fallback for empty
+ * Scoring:
+ * - Each habit has a start_date and end_date defining its active period
+ * - 'before_habits': all habits haven't started yet (before earliest start_date)
+ * - 'future': date is beyond today (no scoring)
+ * - 'no_habits': no habits due on this date (gap day)
+ * - Dates in active period: only scored if logged
+ * - Streak: consecutive days without fail (skips gap days)
  */
 export function computeDayScore(
   habits: Habit[],
@@ -27,27 +23,48 @@ export function computeDayScore(
 ): DayScore {
   const dateOnly = getDateOnly(date);
   const todayOnly = getDateOnly(today);
-  const signupOnly = signupDate ? getDateOnly(signupDate) : null;
 
   // Before signup — ignore
-  if (signupOnly && dateOnly < signupOnly) {
-    return { total: 0, achieved: 0, maxScore: 0, percent: 100, status: 'no_habits' };
+  if (signupDate && dateOnly < getDateOnly(signupDate)) {
+    return { total: 0, achieved: 0, maxScore: 0, percent: 100, status: 'before_habits' };
   }
 
-  // Filter habits that existed on this date
+  // Filter habits that are active on this date (within start-end range + day of week)
   const activeHabits = habits.filter((h) => {
-    const habitCreated = getDateOnly(new Date(h.created_at));
-    // Habit counts for this date if: the date is >= habit creation date
-    // AND the habit is due on this date
-    return dateOnly >= habitCreated && isHabitDueOnDate(h, date);
+    const start = getDateOnly(new Date(h.start_date));
+    const end = getDateOnly(new Date(h.end_date));
+    if (dateOnly < start || dateOnly > end) return false;
+    return isHabitDueOnDate(h, date);
   });
 
+  // Future dates (beyond today) — show as gray
+  if (dateOnly > todayOnly) {
+    if (activeHabits.length === 0) return { total: 0, achieved: 0, maxScore: 0, percent: 0, status: 'future' };
+    // Show as future even if habits exist
+    return { total: 0, achieved: 0, maxScore: 0, percent: 0, status: 'future' };
+  }
+
+  // If no active habits due on this date (gap day)
   if (activeHabits.length === 0) {
+    // Check if date is within any habit's start-end range at all
+    const anyHabitActive = habits.some((h) => {
+      const start = getDateOnly(new Date(h.start_date));
+      const end = getDateOnly(new Date(h.end_date));
+      return dateOnly >= start && dateOnly <= end;
+    });
+    if (!anyHabitActive) {
+      // Date is before any habit started — only return no_habits if we haven't passed today
+      const earliestStart = habits.length > 0
+        ? getDateOnly(new Date(Math.min(...habits.map((h) => new Date(h.start_date).getTime()))))
+        : null;
+      if (earliestStart && dateOnly < earliestStart) {
+        return { total: 0, achieved: 0, maxScore: 0, percent: 100, status: 'before_habits' };
+      }
+    }
     return { total: 0, achieved: 0, maxScore: 0, percent: 100, status: 'no_habits' };
   }
 
   const dateStr = date.toISOString().slice(0, 10);
-  const isFuture = dateOnly > todayOnly;
 
   let maxScore = 0;
   let achieved = 0;
@@ -60,19 +77,6 @@ export function computeDayScore(
       (l) => l.habit_id === habit.id && l.log_date === dateStr
     );
 
-    // Future days: only count what's logged
-    if (isFuture) {
-      if (log) {
-        maxScore += 1;
-        anyLogs = true;
-        if (log.status === 'success') achieved += 1;
-        else if (log.status === 'partial') { achieved += 0.5; anyPartial = true; }
-        else anyFail = true;
-      }
-      continue;
-    }
-
-    // Past or today
     if (log) {
       anyLogs = true;
       maxScore += 1;
@@ -80,33 +84,21 @@ export function computeDayScore(
       else if (log.status === 'partial') { achieved += 0.5; anyPartial = true; }
       else anyFail = true;
     }
-    // Unlogged past days are NOT counted at all — we don't know the user's intent
+    // Unlogged past days: we only show no_habits for them (handled below)
   }
 
-  // If nothing was logged at all and this is past/today, treat as 'no_habits' effectively
-  if (!anyLogs && !isFuture) {
-    return { total: 0, achieved: 0, maxScore: 0, percent: 100, status: 'no_habits' };
-  }
-
-  // If nothing counted at all
-  if (maxScore === 0) {
-    return { total: activeHabits.length, achieved: 0, maxScore: 0, percent: 100, status: 'no_habits' };
+  // Nothing logged at all — gap day in active period
+  if (!anyLogs) {
+    return { total: activeHabits.length, achieved: 0, maxScore: 0, percent: 0, status: 'no_habits' };
   }
 
   const percent = (achieved / maxScore) * 100;
 
   let status: DayScore['status'];
-  if (anyFail) {
-    status = 'fail';
-  } else if (anyPartial) {
-    status = 'partial';
-  } else if (percent >= 100 && anyLogs) {
-    status = 'success';
-  } else if (!anyLogs) {
-    status = 'no_habits';
-  } else {
-    status = 'partial';
-  }
+  if (anyFail) status = 'fail';
+  else if (anyPartial) status = 'partial';
+  else if (percent >= 100) status = 'success';
+  else status = 'partial';
 
   return { total: activeHabits.length, achieved, maxScore, percent, status };
 }
@@ -122,8 +114,8 @@ export function computeStreak(
 
   for (let i = 0; i < 365; i++) {
     const score = computeDayScore(habits, logs, current, today, signupDate);
-    if (signupDate && current < getDateOnly(signupDate)) break;
-    if (score.status === 'no_habits' || score.status === 'none') {
+    if (score.status === 'before_habits') break;
+    if (score.status === 'no_habits' || score.status === 'future' || score.status === 'none') {
       current.setDate(current.getDate() - 1);
       continue;
     }
