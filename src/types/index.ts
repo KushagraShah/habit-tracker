@@ -39,11 +39,12 @@ export interface DayScore {
   achieved: number;
   maxScore: number;
   percent: number;
-  status: 'success' | 'partial' | 'fail' | 'none';
+  status: 'success' | 'partial' | 'fail' | 'none' | 'no_habits';
 }
 
 export const EMOJIS = [
   '💪', '🏃', '📚', '🎯', '🧘', '🎨', '✍️', '🏋️',
   '🚴', '🧠', '🌱', '💧', '🥗', '😴', '☀️', '🎵',
   '📝', '🧹', '💻', '📖', '🎮', '🧭', '🎭', '🌍',
+  '🐶', '🐱', '🌸', '🍳', '🎧', '📷', '✈️', '🏡',
 ];

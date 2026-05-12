@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   fetchHabits,
@@ -20,15 +20,29 @@ export default function HabitsPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [emoji, setEmoji] = useState(EMOJIS[0]);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [successLabel, setSuccessLabel] = useState('');
   const [partialLabel, setPartialLabel] = useState('');
   const [failLabel, setFailLabel] = useState('');
   const [selectedDays, setSelectedDays] = useState<RecurrenceDay[]>([]);
 
+  const emojiRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     if (!user) return;
     loadHabits();
   }, [user]);
+
+  // Close emoji picker when clicking outside
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   const loadHabits = async () => {
     if (!user) return;
@@ -47,6 +61,7 @@ export default function HabitsPage() {
     setTitle('');
     setDescription('');
     setEmoji(EMOJIS[0]);
+    setShowEmojiPicker(false);
     setSuccessLabel('');
     setPartialLabel('');
     setFailLabel('');
@@ -59,6 +74,7 @@ export default function HabitsPage() {
     setTitle(habit.title);
     setDescription(habit.description || '');
     setEmoji(habit.emoji || EMOJIS[0]);
+    setShowEmojiPicker(false);
     setSuccessLabel(habit.success_label || '');
     setPartialLabel(habit.partial_label || '');
     setFailLabel(habit.fail_label || '');
@@ -161,21 +177,34 @@ export default function HabitsPage() {
             <form onSubmit={handleSubmit} className="space-y-3">
               {/* Emoji picker + Title */}
               <div className="flex gap-2 items-start">
-                <div>
+                <div ref={emojiRef} className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Icon</label>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const current = EMOJIS.indexOf(emoji);
-                        setEmoji(EMOJIS[(current + 1) % EMOJIS.length]);
-                      }}
-                      className="text-2xl w-14 h-[42px] flex items-center justify-center border border-gray-300 rounded-lg hover:bg-gray-50"
-                      title="Click to change emoji"
-                    >
-                      {emoji}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                    className="text-2xl w-14 h-[42px] flex items-center justify-center border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+                    title="Choose emoji"
+                  >
+                    {emoji}
+                  </button>
+                  {showEmojiPicker && (
+                    <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-lg p-2 w-64">
+                      <div className="grid grid-cols-8 gap-1 max-h-48 overflow-y-auto">
+                        {EMOJIS.map((e) => (
+                          <button
+                            key={e}
+                            type="button"
+                            onClick={() => { setEmoji(e); setShowEmojiPicker(false); }}
+                            className={`text-xl w-7 h-7 flex items-center justify-center rounded hover:bg-indigo-100 ${
+                              emoji === e ? 'bg-indigo-100 ring-2 ring-indigo-400' : ''
+                            }`}
+                          >
+                            {e}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
@@ -206,7 +235,7 @@ export default function HabitsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Button Labels (optional)
                 </label>
-                <p className="text-xs text-gray-400 mb-2">Custom text for the action buttons on the Today page</p>
+                <p className="text-xs text-gray-400 mb-2">Custom text for the action buttons on the Log page</p>
                 <div className="grid grid-cols-3 gap-2">
                   <div>
                     <label className="block text-xs text-green-600 mb-1">Success</label>

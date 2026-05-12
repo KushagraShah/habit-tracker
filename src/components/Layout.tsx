@@ -2,9 +2,9 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const navItems = [
-  { to: '/today', label: 'Today', icon: '📅' },
-  { to: '/calendar', label: 'Calendar', icon: '📆' },
-  { to: '/habits', label: 'Habits', icon: '✅' },
+  { to: '/today', label: 'Log', icon: '📝' },
+  { to: '/calendar', label: 'Calendar', icon: '📅' },
+  { to: '/habits', label: 'Habits', icon: '⚙️' },
 ];
 
 export default function Layout() {
@@ -33,7 +33,7 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      {/* Bottom navigation (mobile-first, also works on desktop) */}
+      {/* Bottom navigation */}
       <nav className="bg-white border-t border-gray-200 shrink-0">
         <div className="max-w-2xl mx-auto flex">
           {navItems.map((item) => (

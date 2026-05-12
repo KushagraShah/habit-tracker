@@ -65,7 +65,6 @@ export default function TodayPage() {
 
   const dayScore = computeDayScore(habits, logs, viewDate, today, signupDate);
 
-  // Generate the day bar: centered on viewDate, showing DAYS_IN_BAR days
   const barDays = Array.from({ length: DAYS_IN_BAR }, (_, i) => {
     const offset = i - Math.floor(DAYS_IN_BAR / 2);
     return addDays(viewDate, offset);
@@ -73,11 +72,12 @@ export default function TodayPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-4">
-      {/* Day bar - airline booking style */}
+      {/* Day bar */}
       <div className="flex items-center gap-1 mb-4">
         <button
           onClick={goToPrevDay}
-          className="p-3 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 text-xl shrink-0"
+          className="p-4 hover:bg-gray-100 rounded-xl transition-colors text-gray-500 text-2xl shrink-0 min-w-[48px] min-h-[48px] flex items-center justify-center active:bg-gray-200"
+          aria-label="Previous day"
         >
           ←
         </button>
@@ -92,7 +92,7 @@ export default function TodayPage() {
               <button
                 key={day.toISOString()}
                 onClick={() => goToDate(day)}
-                className={`flex flex-col items-center px-3 py-2 rounded-lg min-w-0 transition-colors ${
+                className={`flex flex-col items-center px-3 py-2 rounded-lg min-w-0 transition-colors min-h-[48px] ${
                   isActive
                     ? 'bg-indigo-100 text-indigo-700 font-semibold'
                     : 'hover:bg-gray-100 text-gray-500'
@@ -107,32 +107,44 @@ export default function TodayPage() {
 
         <button
           onClick={goToNextDay}
-          className="p-3 hover:bg-gray-100 rounded-lg transition-colors text-gray-500 text-xl shrink-0"
+          className="p-4 hover:bg-gray-100 rounded-xl transition-colors text-gray-500 text-2xl shrink-0 min-w-[48px] min-h-[48px] flex items-center justify-center active:bg-gray-200"
+          aria-label="Next day"
         >
           →
         </button>
       </div>
 
       {/* Progress bar */}
-      {dayScore.status !== 'none' && (
+      {dayScore.status === 'success' && (
         <div className="mb-4">
           <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span>
-              {dayScore.status === 'success' && '✅ All done'}
-              {dayScore.status === 'partial' && '🟡 Partial'}
-              {dayScore.status === 'fail' && '❌ Missed'}
-            </span>
+            <span className="text-green-600 font-medium">✅ All done</span>
             <span>{Math.round(dayScore.percent)}%</span>
           </div>
           <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${
-                dayScore.status === 'success' ? 'bg-green-500' :
-                dayScore.status === 'partial' ? 'bg-yellow-500' :
-                'bg-red-500'
-              }`}
-              style={{ width: `${Math.min(dayScore.percent, 100)}%` }}
-            />
+            <div className="h-full rounded-full bg-green-500" style={{ width: '100%' }} />
+          </div>
+        </div>
+      )}
+      {dayScore.status === 'partial' && (
+        <div className="mb-4">
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <span className="text-yellow-600 font-medium">🟡 Partial</span>
+            <span>{Math.round(dayScore.percent)}%</span>
+          </div>
+          <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-full rounded-full bg-yellow-500" style={{ width: `${Math.min(dayScore.percent, 100)}%` }} />
+          </div>
+        </div>
+      )}
+      {dayScore.status === 'fail' && (
+        <div className="mb-4">
+          <div className="flex justify-between text-xs text-gray-500 mb-1">
+            <span className="text-red-600 font-medium">❌ Missed</span>
+            <span>{Math.round(dayScore.percent)}%</span>
+          </div>
+          <div className="w-full h-2.5 bg-gray-200 rounded-full overflow-hidden">
+            <div className="h-full rounded-full bg-red-500" style={{ width: `${Math.min(dayScore.percent, 100)}%` }} />
           </div>
         </div>
       )}
@@ -183,7 +195,7 @@ export default function TodayPage() {
                   {(['success', 'partial', 'fail'] as const).map((status) => {
                     const isActive = log?.status === status;
                     const baseClasses =
-                      'flex-1 py-2 rounded-lg text-sm font-medium transition-colors';
+                      'flex-1 py-3 rounded-lg text-sm font-medium transition-colors min-h-[44px]';
                     const activeClasses = isActive
                       ? status === 'success'
                         ? 'bg-green-100 text-green-700 ring-2 ring-green-400'

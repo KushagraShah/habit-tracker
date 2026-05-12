@@ -26,7 +26,6 @@ export default function CalendarPage() {
   const today = new Date();
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
-  // Use weekStartsOn: 1 for Monday
   const calStart = startOfWeek(monthStart, { weekStartsOn: 1 });
   const calEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
   const days = eachDayOfInterval({ start: calStart, end: calEnd });
@@ -43,7 +42,7 @@ export default function CalendarPage() {
       const startStr = format(calStart, 'yyyy-MM-dd');
       const endStr = format(calEnd, 'yyyy-MM-dd');
 
-      // Fetch extra logs for streak calculation
+      // Fetch extra logs going back ~60 days for streak + proper scoring
       const streakStart = subMonths(new Date(), 2);
       const streakStartStr = format(streakStart, 'yyyy-MM-dd');
 
@@ -65,6 +64,31 @@ export default function CalendarPage() {
     return computeDayScore(habits, logs, date, today, signupDate);
   };
 
+  // Get due habit dots for a specific day
+  const getDayDots = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    return habits
+      .filter((h) => {
+        const habitCreated = new Date(h.created_at);
+        const habitDate = new Date(habitCreated.getFullYear(), habitCreated.getMonth(), habitCreated.getDate());
+        const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        return dayStart >= habitDate && isHabitDueOnDate(h, date);
+      })
+      .map((h) => {
+        const log = logs.find((l) => l.habit_id === h.id && l.log_date === dateStr);
+        return {
+          id: h.id,
+          color: !log
+            ? 'bg-gray-300'
+            : log.status === 'success'
+            ? 'bg-green-500'
+            : log.status === 'partial'
+            ? 'bg-yellow-500'
+            : 'bg-red-500',
+        };
+      });
+  };
+
   const streak = computeStreak(habits, logs, today, signupDate);
 
   const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
@@ -73,21 +97,9 @@ export default function CalendarPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
-        <button
-          onClick={prevMonth}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          ←
-        </button>
-        <h2 className="text-xl font-bold text-gray-800">
-          {format(currentDate, 'MMMM yyyy')}
-        </h2>
-        <button
-          onClick={nextMonth}
-          className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-        >
-          →
-        </button>
+        <button onClick={prevMonth} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">←</button>
+        <h2 className="text-xl font-bold text-gray-800">{format(currentDate, 'MMMM yyyy')}</h2>
+        <button onClick={nextMonth} className="p-2 hover:bg-gray-100 rounded-lg transition-colors">→</button>
       </div>
 
       {/* Streak counter */}
@@ -104,15 +116,10 @@ export default function CalendarPage() {
         </div>
       ) : (
         <>
-          {/* Day headers - Monday first */}
+          {/* Day headers - Mon first */}
           <div className="grid grid-cols-7 mb-2">
             {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
-              <div
-                key={d}
-                className="text-center text-xs font-medium text-gray-400 py-2"
-              >
-                {d}
-              </div>
+              <div key={d} className="text-center text-xs font-medium text-gray-400 py-2">{d}</div>
             ))}
           </div>
 
@@ -122,10 +129,15 @@ export default function CalendarPage() {
               const score = getDayScore(day);
               const isDayToday = isSameDay(day, today);
               const isCurrent = isSameMonth(day, currentDate);
+              const dots = getDayDots(day);
 
-              let bgColor = 'bg-gray-50';
-              if (score.status === 'success') bgColor = 'bg-green-100';
-              else if (score.status === 'partial') bgColor = 'bg-yellow-100';
+              // Color logic:
+              // 'no_habits' = green (nothing due = no problem)
+              // 'success' = green
+              // 'partial' = yellow
+              // 'fail' = red
+              let bgColor = 'bg-green-50'; // Default: no issues
+              if (score.status === 'partial') bgColor = 'bg-yellow-100';
               else if (score.status === 'fail') bgColor = 'bg-red-100';
 
               return (
@@ -139,35 +151,16 @@ export default function CalendarPage() {
                 >
                   <span className={`text-xs font-medium ${
                     score.status === 'fail' ? 'text-red-600' :
-                    score.status === 'success' ? 'text-green-700' :
-                    'text-gray-600'
+                    score.status === 'partial' ? 'text-yellow-700' :
+                    'text-green-700'
                   }`}>
                     {format(day, 'd')}
                   </span>
-                  {score.status !== 'none' && (
+                  {dots.length > 0 && (
                     <div className="flex gap-0.5 mt-0.5 flex-wrap justify-center">
-                      {habits
-                        .filter((h) => isHabitDueOnDate(h, day))
-                        .map((h) => {
-                          const ds = format(day, 'yyyy-MM-dd');
-                          const log = logs.find(
-                            (l) => l.habit_id === h.id && l.log_date === ds
-                          );
-                          return (
-                            <div
-                              key={h.id}
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                log?.status === 'success'
-                                  ? 'bg-green-500'
-                                  : log?.status === 'partial'
-                                  ? 'bg-yellow-500'
-                                  : log?.status === 'fail'
-                                  ? 'bg-red-500'
-                                  : 'bg-gray-300'
-                              }`}
-                            />
-                          );
-                        })}
+                      {dots.map((dot) => (
+                        <div key={dot.id} className={`w-1.5 h-1.5 rounded-full ${dot.color}`} />
+                      ))}
                     </div>
                   )}
                 </div>
@@ -176,16 +169,10 @@ export default function CalendarPage() {
           </div>
 
           {/* Legend */}
-          <div className="flex gap-4 mt-6 text-xs text-gray-500 justify-center">
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded bg-green-100" /> Success
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded bg-yellow-100" /> Partial
-            </span>
-            <span className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded bg-red-100" /> Failed
-            </span>
+          <div className="flex gap-4 mt-6 text-xs text-gray-500 justify-center flex-wrap">
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-50 border border-green-200" /> Success / Off</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-100" /> Partial</span>
+            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100" /> Failed</span>
           </div>
         </>
       )}
