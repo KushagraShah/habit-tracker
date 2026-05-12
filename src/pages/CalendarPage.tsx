@@ -67,13 +67,12 @@ function dotColor(status?: HabitStatus): string {
 export default function CalendarPage() {
   const { user, signupDate } = useAuth();
   const navigate = useNavigate();
+  const [today] = useState(() => todayLocal());
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(todayLocal()));
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logs, setLogs] = useState<HabitLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  const today = todayLocal();
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const calendarStart = startOfWeek(monthStart, { weekStartsOn: WEEK_STARTS_ON });
