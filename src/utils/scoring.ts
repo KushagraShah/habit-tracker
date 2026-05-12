@@ -2,6 +2,21 @@ import type { Habit, HabitLog, DayScore } from '../types';
 import { isHabitScheduledOnDate } from '../lib/habits';
 import { formatDateOnly, startOfLocalDay, parseDateOnly } from './date';
 
+const STREAK_POLICY: Record<DayScore['status'], 'count' | 'skip' | 'break'> = {
+  success: 'count',
+  partial: 'count',
+  no_habits: 'count',
+  fail: 'break',
+  before_habits: 'break',
+  future: 'skip',
+  none: 'skip',
+};
+
+export interface StreakChain {
+  count: number;
+  dates: Set<string>;
+}
+
 /**
  * Day scoring rules:
  * - before_habits: date is before signup or before any habit start date
@@ -97,24 +112,7 @@ export function computeStreak(
   today: Date,
   signupDate?: Date | null
 ): number {
-  let streak = 0;
-  const current = startOfLocalDay(today);
-
-  for (let i = 0; i < 365; i++) {
-    const score = computeDayScore(habits, logs, current, today, signupDate);
-    if (score.status === 'before_habits') break;
-    if (score.status === 'future' || score.status === 'none') {
-      current.setDate(current.getDate() - 1);
-      continue;
-    }
-    if (score.status === 'fail') break;
-
-    // Rest/no-habit days preserve but do not increase the streak.
-    if (score.status !== 'no_habits') streak++;
-    current.setDate(current.getDate() - 1);
-  }
-
-  return streak;
+  return computeStreakChain(habits, logs, today, signupDate).count;
 }
 
 export function computeStreakDates(
@@ -123,17 +121,33 @@ export function computeStreakDates(
   today: Date,
   signupDate?: Date | null
 ): Set<string> {
+  return computeStreakChain(habits, logs, today, signupDate).dates;
+}
+
+export function computeStreakChain(
+  habits: Habit[],
+  logs: HabitLog[],
+  today: Date,
+  signupDate?: Date | null,
+  maxDays = 365
+): StreakChain {
   const dates = new Set<string>();
   const current = startOfLocalDay(today);
+  let count = 0;
 
-  for (let i = 0; i < 365; i++) {
+  for (let i = 0; i < maxDays; i++) {
     const score = computeDayScore(habits, logs, current, today, signupDate);
-    if (score.status === 'before_habits' || score.status === 'fail') break;
-    if (score.status !== 'future' && score.status !== 'none' && score.status !== 'no_habits') {
+
+    const decision = STREAK_POLICY[score.status];
+    if (decision === 'break') break;
+
+    if (decision === 'count') {
       dates.add(formatDateOnly(current));
+      count += 1;
     }
+
     current.setDate(current.getDate() - 1);
   }
 
-  return dates;
+  return { count, dates };
 }

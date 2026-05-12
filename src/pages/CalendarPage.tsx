@@ -14,7 +14,7 @@ import {
 } from 'date-fns';
 import { useAuth } from '../contexts/useAuth';
 import { fetchHabits, fetchLogs, isHabitScheduledOnDate } from '../lib/habits';
-import { computeDayScore, computeStreak, computeStreakDates } from '../utils/scoring';
+import { computeDayScore, computeStreakChain } from '../utils/scoring';
 import type { DayScore, Habit, HabitLog, HabitStatus } from '../types';
 import { formatDateOnly, todayLocal } from '../utils/date';
 
@@ -113,8 +113,9 @@ export default function CalendarPage() {
     void loadData();
   }, [loadData]);
 
-  const streak = computeStreak(habits, logs, today, signupDate);
-  const streakDates = computeStreakDates(habits, logs, today, signupDate);
+  const streakChain = computeStreakChain(habits, logs, today, signupDate);
+  const streak = streakChain.count;
+  const streakDates = streakChain.dates;
   const activeHabits = habits.filter((habit) => habit.is_active);
 
   const logsByHabitAndDate = useMemo(() => {
