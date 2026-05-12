@@ -1,89 +1,101 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { fetchHabits, fetchLogs, isHabitDueOnDate, upsertLog } from '../lib/habits';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { addDays, format, subDays } from 'date-fns';
+import { useAuth } from '../contexts/useAuth';
+import {
+  deleteLog,
+  fetchHabits,
+  fetchLogs,
+  isHabitScheduledOnDate,
+  upsertLog,
+} from '../lib/habits';
 import { computeDayScore } from '../utils/scoring';
-import type { Habit, HabitLog } from '../types';
-import { format, addDays, subDays, parseISO, isValid } from 'date-fns';
+import type { Habit, HabitLog, HabitStatus } from '../types';
+import {
+  formatDateOnly,
+  isAfterDateOnly,
+  isBeforeDateOnly,
+  parseDateOnly,
+  todayLocal,
+} from '../utils/date';
 
 const DAYS_IN_BAR = 7;
 
+function getRouteDate(routeDate?: string): Date {
+  if (!routeDate) return todayLocal();
+  const parsed = parseDateOnly(routeDate);
+  return Number.isNaN(parsed.getTime()) ? todayLocal() : parsed;
+}
+
 export default function TodayPage() {
   const { user, signupDate } = useAuth();
+  const navigate = useNavigate();
   const { date: routeDate } = useParams();
   const [habits, setHabits] = useState<Habit[]>([]);
   const [logs, setLogs] = useState<HabitLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewDate, setViewDate] = useState(() => {
-    if (routeDate) {
-      const parsed = parseISO(routeDate);
-      return isValid(parsed) ? parsed : new Date();
-    }
-    return new Date();
-  });
+  const [error, setError] = useState('');
   const [showPastWarning, setShowPastWarning] = useState(false);
 
-  const today = new Date();
-  const isPast = viewDate < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const dateStr = format(viewDate, 'yyyy-MM-dd');
+  const today = todayLocal();
+  const viewDate = useMemo(() => getRouteDate(routeDate), [routeDate]);
+  const dateStr = formatDateOnly(viewDate);
+  const isPast = isBeforeDateOnly(viewDate, today);
+  const isFuture = isAfterDateOnly(viewDate, today);
 
-  useEffect(() => {
-    if (routeDate) {
-      const parsed = parseISO(routeDate);
-      if (isValid(parsed)) setViewDate(parsed);
-    }
-  }, [routeDate]);
-
-  useEffect(() => {
-    if (!user) return;
-    loadData();
-  }, [user, viewDate]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!user) return;
     setLoading(true);
+    setError('');
     try {
       const [habitsData, logsData] = await Promise.all([
         fetchHabits(user.id),
         fetchLogs(user.id, dateStr, dateStr),
       ]);
-      setHabits(habitsData.filter((h) => h.is_active));
+      setHabits(habitsData);
       setLogs(logsData);
     } catch (err) {
-      console.error('Failed to load data', err);
+      setError(err instanceof Error ? err.message : 'Failed to load report data');
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateStr, user]);
 
-  const dueHabits = habits.filter((h) => isHabitDueOnDate(h, viewDate));
-  // Also filter by start/end date for consistency with scoring
-  const activeDueHabits = dueHabits.filter((h) => {
-    const start = new Date(h.start_date);
-    const end = new Date(h.end_date);
-    const day = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate());
-    return day >= new Date(start.getFullYear(), start.getMonth(), start.getDate()) &&
-           day <= new Date(end.getFullYear(), end.getMonth(), end.getDate());
-  });
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const activeDueHabits = useMemo(
+    () => habits.filter((habit) => habit.is_active && isHabitScheduledOnDate(habit, viewDate)),
+    [habits, viewDate]
+  );
 
   const getLogForHabit = (habitId: string): HabitLog | undefined => {
-    return logs.find((l) => l.habit_id === habitId && l.log_date === dateStr);
+    return logs.find((log) => log.habit_id === habitId && log.log_date === dateStr);
   };
 
-  const handleLog = async (habitId: string, status: 'success' | 'partial' | 'fail') => {
-    if (!user) return;
-    if (isPast && !showPastWarning) {
-      setShowPastWarning(true);
+  const handleLog = async (habitId: string, status: HabitStatus) => {
+    if (!user || isFuture) return;
+
+    const existingLog = getLogForHabit(habitId);
+    setError('');
+    if (isPast) setShowPastWarning(true);
+
+    try {
+      if (existingLog?.status === status) {
+        await deleteLog(existingLog.id);
+      } else {
+        await upsertLog(habitId, user.id, dateStr, status);
+      }
+      await loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save log');
     }
-    await upsertLog(habitId, user.id, dateStr, status);
-    await loadData();
   };
 
-  const goToPrevDay = () => setViewDate(subDays(viewDate, 1));
-  const goToNextDay = () => setViewDate(addDays(viewDate, 1));
   const goToDate = (date: Date) => {
-    setViewDate(date);
     setShowPastWarning(false);
+    navigate(`/today/${formatDateOnly(date)}`);
   };
 
   const dayScore = computeDayScore(habits, logs, viewDate, today, signupDate);
@@ -95,21 +107,30 @@ export default function TodayPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-4">
-      {/* Day bar */}
       <div className="flex items-center gap-1 mb-4">
-        <button onClick={goToPrevDay}
+        <button
+          onClick={() => goToDate(subDays(viewDate, 1))}
           className="p-4 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors text-gray-500 dark:text-gray-400 text-2xl shrink-0 min-w-[48px] min-h-[48px] flex items-center justify-center active:bg-gray-200 dark:active:bg-gray-700"
-          aria-label="Previous day">←</button>
+          aria-label="Previous day"
+        >
+          ←
+        </button>
 
-        <div className="flex-1 flex gap-1 overflow-x-auto scrollbar-hide justify-center">
+        <div className="flex-1 flex gap-1 overflow-x-auto justify-center">
           {barDays.map((day) => {
-            const isActive = format(day, 'yyyy-MM-dd') === format(viewDate, 'yyyy-MM-dd');
-            const isDayToday = format(day, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
+            const dayKey = formatDateOnly(day);
+            const isActive = dayKey === dateStr;
+            const isDayToday = dayKey === formatDateOnly(today);
             return (
-              <button key={day.toISOString()} onClick={() => goToDate(day)}
+              <button
+                key={dayKey}
+                onClick={() => goToDate(day)}
                 className={`flex flex-col items-center px-3 py-2 rounded-lg min-w-0 transition-colors min-h-[48px] ${
-                  isActive ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400'
-                }`}>
+                  isActive
+                    ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
+                    : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400'
+                }`}
+              >
                 <span className="text-xs">{format(day, 'EEE')}</span>
                 <span className={`text-sm ${isDayToday ? 'font-bold' : ''}`}>{format(day, 'd')}</span>
               </button>
@@ -117,12 +138,21 @@ export default function TodayPage() {
           })}
         </div>
 
-        <button onClick={goToNextDay}
+        <button
+          onClick={() => goToDate(addDays(viewDate, 1))}
           className="p-4 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-colors text-gray-500 dark:text-gray-400 text-2xl shrink-0 min-w-[48px] min-h-[48px] flex items-center justify-center active:bg-gray-200 dark:active:bg-gray-700"
-          aria-label="Next day">→</button>
+          aria-label="Next day"
+        >
+          →
+        </button>
       </div>
 
-      {/* Day status messages */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-700 rounded-lg px-4 py-2 mb-4 text-sm text-red-700 dark:text-red-300">
+          {error}
+        </div>
+      )}
+
       {dayScore.status === 'before_habits' && (
         <div className="mb-4 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-center text-sm text-gray-500 dark:text-gray-400">
           ⏳ No habits active yet for this date
@@ -130,7 +160,7 @@ export default function TodayPage() {
       )}
       {dayScore.status === 'future' && (
         <div className="mb-4 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-center text-sm text-gray-500 dark:text-gray-400">
-          🔮 Future date — no logging yet
+          🔮 Future date — logging is disabled until the day arrives
         </div>
       )}
       {dayScore.status === 'no_habits' && (
@@ -139,55 +169,49 @@ export default function TodayPage() {
         </div>
       )}
 
-      {/* Progress bar for logged days */}
-      {dayScore.status === 'success' && (
+      {['success', 'partial', 'fail'].includes(dayScore.status) && (
         <div className="mb-4">
           <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span className="text-green-600 dark:text-green-400 font-medium">✅ All done</span>
+            <span
+              className={`font-medium ${
+                dayScore.status === 'success'
+                  ? 'text-green-600 dark:text-green-400'
+                  : dayScore.status === 'partial'
+                    ? 'text-yellow-600 dark:text-yellow-400'
+                    : 'text-red-600 dark:text-red-400'
+              }`}
+            >
+              {dayScore.status === 'success' ? '✅ All done' : dayScore.status === 'partial' ? '🟡 Partial' : '❌ Missed'}
+            </span>
             <span>{Math.round(dayScore.percent)}%</span>
           </div>
           <div className="w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-green-500" style={{ width: '100%' }} />
-          </div>
-        </div>
-      )}
-      {dayScore.status === 'partial' && (
-        <div className="mb-4">
-          <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span className="text-yellow-600 dark:text-yellow-400 font-medium">🟡 Partial</span>
-            <span>{Math.round(dayScore.percent)}%</span>
-          </div>
-          <div className="w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-yellow-500" style={{ width: `${Math.min(dayScore.percent, 100)}%` }} />
-          </div>
-        </div>
-      )}
-      {dayScore.status === 'fail' && (
-        <div className="mb-4">
-          <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span className="text-red-600 dark:text-red-400 font-medium">❌ Missed</span>
-            <span>{Math.round(dayScore.percent)}%</span>
-          </div>
-          <div className="w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-            <div className="h-full rounded-full bg-red-500" style={{ width: `${Math.min(dayScore.percent, 100)}%` }} />
+            <div
+              className={`h-full rounded-full ${
+                dayScore.status === 'success'
+                  ? 'bg-green-500'
+                  : dayScore.status === 'partial'
+                    ? 'bg-yellow-500'
+                    : 'bg-red-500'
+              }`}
+              style={{ width: `${Math.min(dayScore.percent, 100)}%` }}
+            />
           </div>
         </div>
       )}
 
-      {/* Past data warning */}
       {isPast && showPastWarning && (
         <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg px-4 py-2 mb-4 text-sm text-amber-700 dark:text-amber-300">
           ⚠️ You are editing data for a past date. This will affect your streaks and statistics.
         </div>
       )}
 
-      {/* Habits list */}
       {loading ? (
         <div className="flex items-center justify-center h-32"><p className="text-gray-400">Loading...</p></div>
-      ) : activeDueHabits.length === 0 && dayScore.status === 'no_habits' ? null : activeDueHabits.length === 0 ? (
+      ) : activeDueHabits.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-gray-400 text-lg mb-2">Nothing due this day 🎉</p>
-          <p className="text-gray-400 text-sm">Head to the Habits tab to create new habits</p>
+          <p className="text-gray-400 text-sm">Head to the Habits tab to create or resume habits</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -205,21 +229,27 @@ export default function TodayPage() {
 
                 <div className="flex gap-2">
                   {(['success', 'partial', 'fail'] as const).map((status) => {
-                    const isActive = log?.status === status;
-                    const baseClasses = 'flex-1 py-3 rounded-lg text-sm font-medium transition-colors min-h-[44px]';
-                    const activeClasses = isActive
+                    const isSelected = log?.status === status;
+                    const baseClasses = 'flex-1 py-3 rounded-lg text-sm font-medium transition-colors min-h-[44px] disabled:cursor-not-allowed disabled:opacity-50';
+                    const activeClasses = isSelected
                       ? status === 'success' ? 'bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300 ring-2 ring-green-400'
                         : status === 'partial' ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 ring-2 ring-yellow-400'
-                        : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 ring-2 ring-red-400'
+                          : 'bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 ring-2 ring-red-400'
                       : 'bg-gray-50 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700';
 
                     const label = status === 'success' ? habit.success_label || '✅ Done'
                       : status === 'partial' ? habit.partial_label || '🟡 Partial'
-                      : habit.fail_label || '❌ Miss';
+                        : habit.fail_label || '❌ Miss';
 
                     return (
-                      <button key={status} onClick={() => handleLog(habit.id, status)} className={`${baseClasses} ${activeClasses}`}>
-                        {label}
+                      <button
+                        key={status}
+                        disabled={isFuture}
+                        onClick={() => handleLog(habit.id, status)}
+                        className={`${baseClasses} ${activeClasses}`}
+                        title={isSelected ? 'Tap again to clear this log' : undefined}
+                      >
+                        {isSelected ? `${label} ✓` : label}
                       </button>
                     );
                   })}

@@ -1,9 +1,6 @@
 import type { Habit, HabitLog, DayScore } from '../types';
-import { isHabitDueOnDate } from '../lib/habits';
-
-function getDateOnly(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
+import { isHabitScheduledOnDate } from '../lib/habits';
+import { formatDateOnly, startOfLocalDay, parseDateOnly } from './date';
 
 /**
  * Day scoring rules:
@@ -21,36 +18,32 @@ export function computeDayScore(
   today: Date,
   signupDate?: Date | null
 ): DayScore {
-  const day = getDateOnly(date);
-  const todayOnly = getDateOnly(today);
+  const day = startOfLocalDay(date);
+  const todayOnly = startOfLocalDay(today);
 
   if (day > todayOnly) {
     return { total: 0, achieved: 0, maxScore: 0, percent: 0, status: 'future' };
   }
 
-  if (signupDate && day < getDateOnly(signupDate)) {
+  if (signupDate && day < startOfLocalDay(signupDate)) {
     return { total: 0, achieved: 0, maxScore: 0, percent: 0, status: 'before_habits' };
   }
 
   const earliestStart = habits.length > 0
-    ? getDateOnly(new Date(Math.min(...habits.map((h) => new Date(h.start_date).getTime()))))
+    ? startOfLocalDay(new Date(Math.min(...habits.map((h) => parseDateOnly(h.start_date).getTime()))))
     : null;
 
   if (earliestStart && day < earliestStart) {
     return { total: 0, achieved: 0, maxScore: 0, percent: 0, status: 'before_habits' };
   }
 
-  const dueHabits = habits.filter((h) => {
-    const start = getDateOnly(new Date(h.start_date));
-    const end = getDateOnly(new Date(h.end_date));
-    return day >= start && day <= end && isHabitDueOnDate(h, day);
-  });
+  const dueHabits = habits.filter((h) => isHabitScheduledOnDate(h, day));
 
   if (dueHabits.length === 0) {
     return { total: 0, achieved: 0, maxScore: 0, percent: 100, status: 'no_habits' };
   }
 
-  const dayStr = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+  const dayStr = formatDateOnly(day);
 
   let achieved = 0;
   let anyFail = false;
@@ -105,7 +98,7 @@ export function computeStreak(
   signupDate?: Date | null
 ): number {
   let streak = 0;
-  const current = getDateOnly(today);
+  const current = startOfLocalDay(today);
 
   for (let i = 0; i < 365; i++) {
     const score = computeDayScore(habits, logs, current, today, signupDate);
@@ -116,10 +109,31 @@ export function computeStreak(
     }
     if (score.status === 'fail') break;
 
-    // success / partial / no_habits -> keep streak alive
-    streak++;
+    // Rest/no-habit days preserve but do not increase the streak.
+    if (score.status !== 'no_habits') streak++;
     current.setDate(current.getDate() - 1);
   }
 
   return streak;
+}
+
+export function computeStreakDates(
+  habits: Habit[],
+  logs: HabitLog[],
+  today: Date,
+  signupDate?: Date | null
+): Set<string> {
+  const dates = new Set<string>();
+  const current = startOfLocalDay(today);
+
+  for (let i = 0; i < 365; i++) {
+    const score = computeDayScore(habits, logs, current, today, signupDate);
+    if (score.status === 'before_habits' || score.status === 'fail') break;
+    if (score.status !== 'future' && score.status !== 'none' && score.status !== 'no_habits') {
+      dates.add(formatDateOnly(current));
+    }
+    current.setDate(current.getDate() - 1);
+  }
+
+  return dates;
 }

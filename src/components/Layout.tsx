@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { useTheme } from '../contexts/ThemeContext';
+import { useAuth } from '../contexts/useAuth';
+import { useTheme } from '../contexts/useTheme';
 
 const navItems = [
   { to: '/today', label: 'Report', icon: '📝' },

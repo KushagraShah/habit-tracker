@@ -10,6 +10,7 @@ export interface Habit {
   fail_label: string | null;
   start_date: string;
   end_date: string;
+  pause_periods: PausePeriod[] | null;
   sort_order: number;
   is_active: boolean;
   created_at: string;
@@ -21,6 +22,11 @@ export type RecurrenceDay =
 
 export type HabitStatus = 'success' | 'partial' | 'fail';
 
+export interface PausePeriod {
+  start: string;
+  end?: string | null;
+}
+
 export interface HabitLog {
   id: string;
   habit_id: string;
@@ -31,6 +37,10 @@ export interface HabitLog {
   created_at: string;
   updated_at: string;
 }
+
+export type HabitCreateInput = Omit<Habit, 'id' | 'created_at' | 'updated_at'>;
+
+export type HabitUpdateInput = Partial<Omit<Habit, 'id' | 'created_at' | 'user_id'>>;
 
 export const DAYS_OF_WEEK: RecurrenceDay[] = [
   'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'

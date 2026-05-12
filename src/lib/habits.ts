@@ -1,11 +1,28 @@
-import type { RecurrenceDay } from '../types';
+import type { HabitCreateInput, HabitUpdateInput, RecurrenceDay } from '../types';
 import { supabase } from './supabase';
 import type { Habit, HabitLog } from '../types';
+import { parseDateOnly, startOfLocalDay } from '../utils/date';
 
 export function isHabitDueOnDate(habit: Habit, date: Date): boolean {
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const dayName = dayNames[date.getDay()] as RecurrenceDay;
   return habit.recurrence.includes(dayName);
+}
+
+export function isHabitPausedOnDate(habit: Habit, date: Date): boolean {
+  const day = startOfLocalDay(date);
+  return (habit.pause_periods ?? []).some((period) => {
+    const start = parseDateOnly(period.start);
+    const end = period.end ? parseDateOnly(period.end) : null;
+    return day >= start && (!end || day <= end);
+  });
+}
+
+export function isHabitScheduledOnDate(habit: Habit, date: Date): boolean {
+  const day = startOfLocalDay(date);
+  const start = parseDateOnly(habit.start_date);
+  const end = parseDateOnly(habit.end_date);
+  return day >= start && day <= end && isHabitDueOnDate(habit, day) && !isHabitPausedOnDate(habit, day);
 }
 
 export async function fetchHabits(userId: string): Promise<Habit[]> {
@@ -19,7 +36,7 @@ export async function fetchHabits(userId: string): Promise<Habit[]> {
 }
 
 export async function createHabit(
-  habit: Omit<Habit, 'id' | 'created_at' | 'updated_at'>
+  habit: HabitCreateInput
 ): Promise<Habit> {
   const { data, error } = await supabase
     .from('habits')
@@ -32,7 +49,7 @@ export async function createHabit(
 
 export async function updateHabit(
   id: string,
-  updates: Partial<Habit>
+  updates: HabitUpdateInput
 ): Promise<Habit> {
   const { data, error } = await supabase
     .from('habits')
