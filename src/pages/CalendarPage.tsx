@@ -116,11 +116,22 @@ export default function CalendarPage() {
         <button onClick={nextMonth} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors">→</button>
       </div>
 
-      {/* Current streak display */}
+      {/* Current streak display - prominent */}
       {streak > 0 && (
-        <div className="text-center mb-4 px-4 py-2 bg-orange-50 dark:bg-orange-900/30 rounded-lg">
-          <span className="text-orange-600 dark:text-orange-400 font-bold text-lg">🔥 {streak}</span>
-          <span className="text-orange-500 dark:text-orange-300 text-sm ml-1">day streak (no failed days)</span>
+        <div className="text-center mb-4 px-4 py-3 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 rounded-xl border border-orange-200 dark:border-orange-700/50">
+          <div className="flex items-center justify-center gap-2">
+            <span className="text-3xl">🔥</span>
+            <div>
+              <span className="text-2xl font-bold text-orange-600 dark:text-orange-400">{streak}</span>
+              <span className="text-orange-500 dark:text-orange-300 ml-1 font-medium">day streak</span>
+            </div>
+          </div>
+          <p className="text-xs text-orange-400 dark:text-orange-500 mt-1">No failed days — keep going!</p>
+        </div>
+      )}
+      {streak === 0 && habits.length > 0 && (
+        <div className="text-center mb-4 px-4 py-2 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <span className="text-gray-400 text-sm">No active streak — log a successful day to start one 🔥</span>
         </div>
       )}
 
