@@ -28,9 +28,9 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8">
-        <h1 className="text-2xl font-bold text-center mb-2 text-gray-800">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-950 px-4">
+      <div className="w-full max-w-md bg-white dark:bg-gray-900 rounded-2xl shadow-lg p-8">
+        <h1 className="text-2xl font-bold text-center mb-2 text-gray-800 dark:text-gray-100">
           Habit Tracker
         </h1>
         <p className="text-gray-500 text-center mb-6 text-sm">

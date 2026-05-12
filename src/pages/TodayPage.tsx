@@ -57,6 +57,14 @@ export default function TodayPage() {
   };
 
   const dueHabits = habits.filter((h) => isHabitDueOnDate(h, viewDate));
+  // Also filter by start/end date for consistency with scoring
+  const activeDueHabits = dueHabits.filter((h) => {
+    const start = new Date(h.start_date);
+    const end = new Date(h.end_date);
+    const day = new Date(viewDate.getFullYear(), viewDate.getMonth(), viewDate.getDate());
+    return day >= new Date(start.getFullYear(), start.getMonth(), start.getDate()) &&
+           day <= new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  });
 
   const getLogForHabit = (habitId: string): HabitLog | undefined => {
     return logs.find((l) => l.habit_id === habitId && l.log_date === dateStr);
@@ -84,11 +92,6 @@ export default function TodayPage() {
     const offset = i - Math.floor(DAYS_IN_BAR / 2);
     return addDays(viewDate, offset);
   });
-
-  const isDayBeforeStart = dayScore.status === 'before_habits';
-  const isDayFuture = dayScore.status === 'future';
-  const isDayNoHabits = dayScore.status === 'no_habits';
-  const isDayLogged = dayScore.status === 'success' || dayScore.status === 'partial' || dayScore.status === 'fail';
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-4">
@@ -120,17 +123,17 @@ export default function TodayPage() {
       </div>
 
       {/* Day status messages */}
-      {isDayBeforeStart && (
+      {dayScore.status === 'before_habits' && (
         <div className="mb-4 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-center text-sm text-gray-500 dark:text-gray-400">
           ⏳ No habits active yet for this date
         </div>
       )}
-      {isDayFuture && (
+      {dayScore.status === 'future' && (
         <div className="mb-4 px-4 py-2 bg-gray-100 dark:bg-gray-800 rounded-lg text-center text-sm text-gray-500 dark:text-gray-400">
           🔮 Future date — no logging yet
         </div>
       )}
-      {isDayNoHabits && !isDayBeforeStart && !isDayFuture && (
+      {dayScore.status === 'no_habits' && (
         <div className="mb-4 px-4 py-2 bg-green-50 dark:bg-green-950/30 rounded-lg text-center text-sm text-green-600 dark:text-green-400">
           🌿 Nothing due — rest day
         </div>
@@ -181,14 +184,14 @@ export default function TodayPage() {
       {/* Habits list */}
       {loading ? (
         <div className="flex items-center justify-center h-32"><p className="text-gray-400">Loading...</p></div>
-      ) : dueHabits.length === 0 && isDayLogged ? (
+      ) : activeDueHabits.length === 0 && dayScore.status === 'no_habits' ? null : activeDueHabits.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-gray-400 text-lg mb-2">Nothing due this day 🎉</p>
           <p className="text-gray-400 text-sm">Head to the Habits tab to create new habits</p>
         </div>
-      ) : isDayLogged && dueHabits.length === 0 ? null : dueHabits.length === 0 ? null : (
+      ) : (
         <div className="space-y-3">
-          {dueHabits.map((habit) => {
+          {activeDueHabits.map((habit) => {
             const log = getLogForHabit(habit.id);
             return (
               <div key={habit.id} className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
