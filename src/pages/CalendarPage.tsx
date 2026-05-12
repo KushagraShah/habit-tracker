@@ -9,17 +9,15 @@ import {
   isSameMonth,
   startOfMonth,
   startOfWeek,
-  subDays,
   subMonths,
 } from 'date-fns';
 import { useAuth } from '../contexts/useAuth';
 import { fetchHabits, fetchLogs, isHabitScheduledOnDate } from '../lib/habits';
-import { computeDayScore, computeStreakChain } from '../utils/scoring';
+import { computeDayScore } from '../utils/scoring';
 import type { DayScore, Habit, HabitLog, HabitStatus } from '../types';
 import { formatDateOnly, todayLocal } from '../utils/date';
 
 const WEEK_STARTS_ON = 1;
-const STREAK_LOOKBACK_DAYS = 365;
 
 const STATUS_STYLES: Record<DayScore['status'], { cell: string; text: string; label: string }> = {
   success: {
@@ -91,13 +89,11 @@ export default function CalendarPage() {
     setError('');
 
     try {
-      const logStart = subDays(today, STREAK_LOOKBACK_DAYS);
-      const start = logStart < calendarStart ? logStart : calendarStart;
       const end = calendarEnd > today ? calendarEnd : today;
 
       const [habitsData, logsData] = await Promise.all([
         fetchHabits(user.id),
-        fetchLogs(user.id, formatDateOnly(start), formatDateOnly(end)),
+        fetchLogs(user.id, formatDateOnly(calendarStart), formatDateOnly(end)),
       ]);
 
       setHabits(habitsData);
@@ -113,9 +109,6 @@ export default function CalendarPage() {
     void loadData();
   }, [loadData]);
 
-  const streakChain = computeStreakChain(habits, logs, today, signupDate);
-  const streak = streakChain.count;
-  const streakDates = streakChain.dates;
   const activeHabits = habits.filter((habit) => habit.is_active);
 
   const logsByHabitAndDate = useMemo(() => {
@@ -188,10 +181,6 @@ export default function CalendarPage() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
         <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 p-3">
-          <p className="text-xs text-gray-400">Current streak</p>
-          <p className="text-xl font-bold text-orange-500">🔥 {streak}</p>
-        </div>
-        <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 p-3">
           <p className="text-xs text-gray-400">Avg. score</p>
           <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">{dayStats.average}%</p>
         </div>
@@ -225,7 +214,6 @@ export default function CalendarPage() {
               const dots = getHabitDots(day);
               const isCurrentMonth = isSameMonth(day, currentMonth);
               const isToday = dateKey === formatDateOnly(today);
-              const isInStreak = streakDates.has(dateKey);
 
               return (
                 <button
@@ -233,7 +221,7 @@ export default function CalendarPage() {
                   onClick={() => navigate(`/today/${dateKey}`)}
                   className={`aspect-square rounded-xl border p-1.5 flex flex-col items-center justify-center transition-all hover:ring-2 hover:ring-indigo-300 ${
                     isCurrentMonth ? styles.cell : 'bg-gray-50 dark:bg-gray-900/40 border-gray-100 dark:border-gray-800 opacity-40'
-                  } ${isToday ? 'ring-2 ring-indigo-400' : ''} ${isInStreak ? 'shadow-[0_0_0_2px_rgba(251,146,60,0.35)]' : ''}`}
+                  } ${isToday ? 'ring-2 ring-indigo-400' : ''}`}
                   title={`${format(day, 'PPP')}: ${styles.label}`}
                 >
                   <span className={`text-xs font-semibold ${styles.text}`}>{format(day, 'd')}</span>
@@ -242,7 +230,6 @@ export default function CalendarPage() {
                       <span key={dot.id} className={`w-1.5 h-1.5 rounded-full ${dot.color}`} title={dot.title} />
                     ))}
                   </div>
-                  {isInStreak && <span className="text-[9px] leading-none mt-0.5">🔥</span>}
                 </button>
               );
             })}
@@ -254,7 +241,6 @@ export default function CalendarPage() {
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-100 border border-yellow-200" /> Partial</span>
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100 border border-red-200" /> Missed / unlogged</span>
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-50 border border-gray-200" /> Rest / future</span>
-              <span className="flex items-center gap-1">🔥 Streak day</span>
             </div>
             {dayStats.dueDays > 0 && (
               <p className="text-center text-xs text-gray-400 mt-3">
