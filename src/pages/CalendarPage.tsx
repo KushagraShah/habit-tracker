@@ -73,10 +73,19 @@ export default function CalendarPage() {
   const [logs, setLogs] = useState<HabitLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(currentMonth);
-  const calendarStart = startOfWeek(monthStart, { weekStartsOn: WEEK_STARTS_ON });
-  const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: WEEK_STARTS_ON });
+
+  const { calendarStart, calendarEnd } = useMemo(() => {
+    const computedMonthStart = startOfMonth(currentMonth);
+    const computedMonthEnd = endOfMonth(currentMonth);
+    const computedCalendarStart = startOfWeek(computedMonthStart, { weekStartsOn: WEEK_STARTS_ON });
+    const computedCalendarEnd = endOfWeek(computedMonthEnd, { weekStartsOn: WEEK_STARTS_ON });
+
+    return {
+      calendarStart: computedCalendarStart,
+      calendarEnd: computedCalendarEnd,
+    };
+  }, [currentMonth]);
+
   const visibleDays = useMemo(
     () => eachDayOfInterval({ start: calendarStart, end: calendarEnd }),
     [calendarStart, calendarEnd]
