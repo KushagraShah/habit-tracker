@@ -67,7 +67,7 @@ export default function CalendarPage() {
     navigate(`/today/${format(date, 'yyyy-MM-dd')}`);
   };
 
-  // Compute streak date set for highlighting
+  // Compute streak date set for highlighting (same semantics as streak counter)
   const streakDates = new Set<string>();
   if (streak > 0) {
     const current = new Date();
@@ -75,10 +75,11 @@ export default function CalendarPage() {
       const score = computeDayScore(habits, logs, current, today, signupDate);
       if (score.status === 'before_habits') break;
       if (score.status === 'fail') break;
-      if (score.status === 'no_habits' || score.status === 'future' || score.status === 'none') {
+      if (score.status === 'future' || score.status === 'none') {
         current.setDate(current.getDate() - 1);
         continue;
       }
+      // success / partial / no_habits are all part of the active streak chain
       streakDates.add(format(current, 'yyyy-MM-dd'));
       current.setDate(current.getDate() - 1);
       if (streakDates.size >= streak) break;
@@ -157,7 +158,11 @@ export default function CalendarPage() {
               let bgColor = 'bg-green-50 dark:bg-green-950/30'; // no issues
               if (score.status === 'before_habits') bgColor = 'bg-gray-100 dark:bg-gray-800';
               else if (score.status === 'future') bgColor = 'bg-gray-100 dark:bg-gray-800';
-              else if (score.status === 'no_habits') bgColor = 'bg-green-50 dark:bg-green-950/30';
+              else if (score.status === 'no_habits') {
+                bgColor = isInStreak
+                  ? 'bg-emerald-200 dark:bg-emerald-800/50'
+                  : 'bg-green-50 dark:bg-green-950/30';
+              }
               else if (score.status === 'partial') bgColor = 'bg-yellow-100 dark:bg-yellow-900/30';
               else if (score.status === 'fail') bgColor = 'bg-red-100 dark:bg-red-900/30';
               else if (score.status === 'success') bgColor = isInStreak ? 'bg-emerald-200 dark:bg-emerald-800/50' : 'bg-green-100 dark:bg-green-900/30';
@@ -189,7 +194,7 @@ export default function CalendarPage() {
                       ))}
                     </div>
                   )}
-                  {isInStreak && dots.length > 0 && (
+                  {isInStreak && (
                     <span className="text-[8px] mt-0.5">🔥</span>
                   )}
                 </button>
