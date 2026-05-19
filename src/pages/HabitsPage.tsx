@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { addYears } from 'date-fns';
+import GraphemeSplitter from 'grapheme-splitter';
+import emojiRegex from 'emoji-regex';
 import { useAuth } from '../contexts/useAuth';
 import {
   createHabit,
@@ -14,9 +16,26 @@ import { DAYS_OF_WEEK, EMOJIS } from '../types';
 import { formatDateOnly, isAfterDateOnly, todayLocal } from '../utils/date';
 
 const DEFAULT_HABIT_YEARS = 1;
+const splitter = new GraphemeSplitter();
 
 function getDefaultEndDate(): string {
   return formatDateOnly(addYears(todayLocal(), DEFAULT_HABIT_YEARS));
+}
+
+function extractSingleEmoji(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  const graphemes = splitter.splitGraphemes(trimmed);
+  const first = graphemes[0] ?? '';
+  const regex = emojiRegex();
+  const matches = first.match(regex);
+
+  if (!matches || matches[0] !== first) {
+    return '';
+  }
+
+  return first;
 }
 
 function closeOpenPausePeriod(periods: PausePeriod[], date: string): PausePeriod[] {
@@ -45,6 +64,9 @@ export default function HabitsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showManualEmojiInput, setShowManualEmojiInput] = useState(false);
+  const [manualEmojiDraft, setManualEmojiDraft] = useState('');
+  const [manualEmojiHint, setManualEmojiHint] = useState('');
   const emojiRef = useRef<HTMLDivElement>(null);
 
   const [title, setTitle] = useState('');
@@ -103,6 +125,9 @@ export default function HabitsPage() {
     const handleClick = (event: MouseEvent) => {
       if (emojiRef.current && !emojiRef.current.contains(event.target as Node)) {
         setShowEmojiPicker(false);
+        setShowManualEmojiInput(false);
+        setManualEmojiDraft('');
+        setManualEmojiHint('');
       }
     };
     document.addEventListener('mousedown', handleClick);
@@ -114,6 +139,9 @@ export default function HabitsPage() {
     setDescription('');
     setEmoji('💪');
     setShowEmojiPicker(false);
+    setShowManualEmojiInput(false);
+    setManualEmojiDraft('');
+    setManualEmojiHint('');
     setSuccessLabel('');
     setPartialLabel('');
     setFailLabel('');
@@ -132,6 +160,9 @@ export default function HabitsPage() {
     setDescription(habit.description || '');
     setEmoji(habit.emoji || '💪');
     setShowEmojiPicker(false);
+    setShowManualEmojiInput(false);
+    setManualEmojiDraft('');
+    setManualEmojiHint('');
     setSuccessLabel(habit.success_label || '');
     setPartialLabel(habit.partial_label || '');
     setFailLabel(habit.fail_label || '');
@@ -149,6 +180,28 @@ export default function HabitsPage() {
     setSelectedDays((prev) =>
       prev.includes(day) ? prev.filter((selected) => selected !== day) : [...prev, day]
     );
+  };
+
+  const handleManualEmojiChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextEmoji = extractSingleEmoji(event.target.value);
+
+    if (!event.target.value.trim()) {
+      setManualEmojiDraft('');
+      setManualEmojiHint('');
+      return;
+    }
+
+    if (!nextEmoji) {
+      setManualEmojiDraft('');
+      setManualEmojiHint('Please enter one emoji.');
+      return;
+    }
+
+    setManualEmojiDraft(nextEmoji);
+    setManualEmojiHint('');
+    setEmoji(nextEmoji);
+    setShowManualEmojiInput(false);
+    setShowEmojiPicker(false);
   };
 
   const validateForm = (): boolean => {
@@ -175,7 +228,7 @@ export default function HabitsPage() {
     const baseHabitData = {
       title: title.trim(),
       description: description.trim() || null,
-      emoji,
+      emoji: emoji || '💪',
       recurrence: schedulingType === 'fixed_weekdays' ? selectedDays : [],
       scheduling_type: schedulingType,
       weekly_target: schedulingType === 'flexible_weekly' ? weeklyTarget : null,
@@ -320,7 +373,13 @@ export default function HabitsPage() {
                           <button
                             key={option}
                             type="button"
-                            onClick={() => { setEmoji(option); setShowEmojiPicker(false); }}
+                            onClick={() => {
+                              setEmoji(option);
+                              setShowEmojiPicker(false);
+                              setShowManualEmojiInput(false);
+                              setManualEmojiDraft('');
+                              setManualEmojiHint('');
+                            }}
                             className={`text-xl w-7 h-7 flex items-center justify-center rounded hover:bg-indigo-100 dark:hover:bg-indigo-900 ${
                               emoji === option ? 'bg-indigo-100 dark:bg-indigo-900 ring-2 ring-indigo-400' : ''
                             }`}
@@ -328,6 +387,33 @@ export default function HabitsPage() {
                             {option}
                           </button>
                         ))}
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowManualEmojiInput((show) => !show);
+                            setManualEmojiDraft('');
+                            setManualEmojiHint('');
+                          }}
+                          className="w-full text-left text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
+                        >
+                          Use phone keyboard
+                        </button>
+                        {showManualEmojiInput && (
+                          <div className="mt-2">
+                            <input
+                              type="text"
+                              value={manualEmojiDraft}
+                              onChange={handleManualEmojiChange}
+                              placeholder="🙂"
+                              autoFocus
+                              className="w-full px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-gray-800 dark:text-gray-100"
+                            />
+                            <p className="text-[11px] text-gray-400 mt-1">Enter one emoji using your phone keyboard.</p>
+                            {manualEmojiHint && <p className="text-[11px] text-red-500 mt-1">{manualEmojiHint}</p>}
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
