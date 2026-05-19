@@ -46,7 +46,7 @@ export default function TodayPage() {
   const [showTrend, setShowTrend] = useState(false);
 
   const today = todayLocal();
-  const viewDate = useMemo(() => getRouteDate(routeDate), [routeDate]);
+  const viewDate = getRouteDate(routeDate);
   const dateStr = formatDateOnly(viewDate);
   const isPast = isBeforeDateOnly(viewDate, today);
   const isFuture = isAfterDateOnly(viewDate, today);
