@@ -13,7 +13,7 @@ import type { Habit, HabitCreateInput, PausePeriod, RecurrenceDay, SchedulingTyp
 import { DAYS_OF_WEEK, EMOJIS } from '../types';
 import { formatDateOnly, isAfterDateOnly, todayLocal } from '../utils/date';
 
-const DEFAULT_HABIT_YEARS = 10;
+const DEFAULT_HABIT_YEARS = 1;
 
 function getDefaultEndDate(): string {
   return formatDateOnly(addYears(todayLocal(), DEFAULT_HABIT_YEARS));
@@ -351,7 +351,6 @@ export default function HabitsPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End date</label>
                   <input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-gray-800 dark:text-gray-100 text-sm" />
-                  <p className="text-[11px] text-gray-400 mt-1">Defaults far in the future so habits do not expire after 30 days.</p>
                 </div>
               </div>
 
