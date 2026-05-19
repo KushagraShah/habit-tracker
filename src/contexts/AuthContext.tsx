@@ -15,12 +15,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!isMounted) return;
-      setUser(session?.user ?? null);
-      if (!session?.user) setSignupDate(null);
-      setLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        if (!isMounted) return;
+        setUser(session?.user ?? null);
+        if (!session?.user) setSignupDate(null);
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setUser(null);
+        setSignupDate(null);
+      })
+      .finally(() => {
+        if (!isMounted) return;
+        setLoading(false);
+      });
 
     const {
       data: { subscription },
@@ -41,16 +50,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     let isMounted = true;
 
-    supabase
-      .from('profiles')
-      .select('created_at')
-      .eq('id', user.id)
-      .single()
-      .then(({ data, error }) => {
-        if (isMounted && data && !error) {
+    const loadSignupDate = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('created_at')
+          .eq('id', user.id)
+          .single();
+
+        if (!isMounted) return;
+        if (data && !error) {
           setSignupDate(new Date(data.created_at));
+          return;
         }
-      });
+        setSignupDate(null);
+      } catch {
+        if (!isMounted) return;
+        setSignupDate(null);
+      }
+    };
+
+    void loadSignupDate();
 
     return () => {
       isMounted = false;

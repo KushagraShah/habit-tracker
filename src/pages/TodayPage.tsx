@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { addDays, format, subDays } from 'date-fns';
 import { useAuth } from '../contexts/useAuth';
@@ -26,6 +26,16 @@ import {
 const DAYS_IN_BAR = 7;
 const TREND_WEEKS = 8;
 
+function mergeLogsById(...collections: HabitLog[][]): HabitLog[] {
+  const map = new Map<string, HabitLog>();
+  for (const logs of collections) {
+    for (const log of logs) {
+      map.set(log.id, log);
+    }
+  }
+  return Array.from(map.values());
+}
+
 function getRouteDate(routeDate?: string): Date {
   if (!routeDate) return todayLocal();
   const parsed = parseDateOnly(routeDate);
@@ -50,45 +60,37 @@ export default function TodayPage() {
   const isFuture = isAfterDateOnly(viewDate, today);
 
   // Weekly summary for the current view date's week
-  const weekStart = useMemo(() => getWeekStart(viewDate), [viewDate]);
-  const weekEnd = useMemo(() => getWeekEnd(viewDate), [viewDate]);
+  const weekStart = getWeekStart(viewDate);
+  const weekEnd = getWeekEnd(viewDate);
   const weekStartStr = formatDateOnly(weekStart);
   const weekEndStr = formatDateOnly(weekEnd);
 
   // Trend weeks data
-  const trendWeeks = useMemo(() => getWeeksBack(today, TREND_WEEKS), [today]);
-
-  const loadData = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    setError('');
-    try {
-      // Fetch habits and logs for current date + current week
-      const [habitsData, logsData, weekLogsData] = await Promise.all([
-        fetchHabits(user.id),
-        fetchLogs(user.id, dateStr, dateStr),
-        fetchLogs(user.id, weekStartStr, weekEndStr),
-      ]);
-      setHabits(habitsData);
-
-      // Merge logs from both fetches
-      const mergedLogs = [...logsData];
-      for (const log of weekLogsData) {
-        if (!mergedLogs.find(l => l.id === log.id)) {
-          mergedLogs.push(log);
-        }
-      }
-      setLogs(mergedLogs);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load report data');
-    } finally {
-      setLoading(false);
-    }
-  }, [dateStr, weekStartStr, weekEndStr, user]);
+  const trendWeeks = getWeeksBack(today, TREND_WEEKS);
 
   useEffect(() => {
+    if (!user) return;
+
+    const loadData = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        // Fetch habits and logs for current week (covers current day)
+        const [habitsData, weekLogsData] = await Promise.all([
+          fetchHabits(user.id),
+          fetchLogs(user.id, weekStartStr, weekEndStr),
+        ]);
+        setHabits(habitsData);
+        setLogs(weekLogsData);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load report data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     void loadData();
-  }, [loadData]);
+  }, [user, weekStartStr, weekEndStr]);
 
   // Fetch additional logs for trend chart
   useEffect(() => {
@@ -98,15 +100,7 @@ export default function TodayPage() {
       const end = getWeekEnd(trendWeeks[trendWeeks.length - 1]);
       try {
         const trendLogs = await fetchLogs(user.id, formatDateOnly(start), formatDateOnly(end));
-        setLogs(prev => {
-          const merged = [...prev];
-          for (const log of trendLogs) {
-            if (!merged.find(l => l.id === log.id)) {
-              merged.push(log);
-            }
-          }
-          return merged;
-        });
+        setLogs((prev) => mergeLogsById(prev, trendLogs));
       } catch {
         // Silent fail for trend logs
       }
@@ -114,10 +108,7 @@ export default function TodayPage() {
     fetchTrendLogs();
   }, [user, trendWeeks]);
 
-  const activeDueHabits = useMemo(
-    () => habits.filter((habit) => habit.is_active && isHabitScheduledOnDate(habit, viewDate)),
-    [habits, viewDate]
-  );
+  const activeDueHabits = habits.filter((habit) => habit.is_active && isHabitScheduledOnDate(habit, viewDate));
 
   const getLogForHabit = (habitId: string): HabitLog | undefined => {
     return logs.find((log) => log.habit_id === habitId && log.log_date === dateStr);
@@ -136,7 +127,13 @@ export default function TodayPage() {
       } else {
         await upsertLog(habitId, user.id, dateStr, status);
       }
-      await loadData();
+
+      const [habitsData, weekLogsData] = await Promise.all([
+        fetchHabits(user.id),
+        fetchLogs(user.id, weekStartStr, weekEndStr),
+      ]);
+      setHabits(habitsData);
+      setLogs(weekLogsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save log');
     }
@@ -149,15 +146,9 @@ export default function TodayPage() {
 
   const dayScore = computeDayScore(habits, logs, viewDate, today, signupDate);
 
-  const weeklySummary = useMemo(
-    () => getWeeklyAggregate(habits, logs, weekStart, today),
-    [habits, logs, weekStart, today]
-  );
+  const weeklySummary = getWeeklyAggregate(habits, logs, weekStart, today);
 
-  const weeklyTrend = useMemo(
-    () => getWeeklyTrendData(habits, logs, trendWeeks, today),
-    [habits, logs, trendWeeks, today]
-  );
+  const weeklyTrend = getWeeklyTrendData(habits, logs, trendWeeks, today);
 
   const barDays = Array.from({ length: DAYS_IN_BAR }, (_, i) => {
     const offset = i - Math.floor(DAYS_IN_BAR / 2);

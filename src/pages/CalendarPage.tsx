@@ -15,7 +15,7 @@ import { useAuth } from '../contexts/useAuth';
 import { fetchHabits, fetchLogs } from '../lib/habits';
 import { getDailyAggregate, getMonthlyAggregate, isHabitActiveOnDate, isHabitScheduledOnDate } from '../utils/scoring';
 import type { Habit, HabitLog } from '../types';
-import { formatDateOnly, todayLocal } from '../utils/date';
+import { formatDateOnly, isAfterDateOnly, todayLocal } from '../utils/date';
 
 const WEEK_STARTS_ON = 1;
 
@@ -93,7 +93,7 @@ export default function CalendarPage() {
     setError('');
 
     try {
-      const end = calendarEnd > today ? calendarEnd : today;
+      const end = isAfterDateOnly(calendarEnd, today) ? calendarEnd : today;
       const [habitsData, logsData] = await Promise.all([
         fetchHabits(user.id),
         fetchLogs(user.id, formatDateOnly(calendarStart), formatDateOnly(end)),
@@ -127,7 +127,7 @@ export default function CalendarPage() {
 
   const getHabitDots = useCallback((day: Date) => {
     const dateKey = formatDateOnly(day);
-    const isFutureDay = day > today;
+    const isFutureDay = isAfterDateOnly(day, today);
 
     return habits
       .map((habit) => {
