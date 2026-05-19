@@ -13,7 +13,7 @@ import {
 } from 'date-fns';
 import { useAuth } from '../contexts/useAuth';
 import { fetchHabits, fetchLogs } from '../lib/habits';
-import { getDailyAggregate, getMonthlyAggregate } from '../utils/scoring';
+import { getDailyAggregate, getMonthlyAggregate, isHabitActiveOnDate, isHabitScheduledOnDate } from '../utils/scoring';
 import type { Habit, HabitLog } from '../types';
 import { formatDateOnly, todayLocal } from '../utils/date';
 
@@ -114,10 +114,57 @@ export default function CalendarPage() {
 
   const activeHabits = habits.filter((habit) => habit.is_active);
 
+  const logsByHabitAndDate = useMemo(() => {
+    const map = new Map<string, HabitLog>();
+    logs.forEach((log) => map.set(`${log.habit_id}:${log.log_date}`, log));
+    return map;
+  }, [logs]);
+
   const monthStats = useMemo(
     () => getMonthlyAggregate(habits, logs, monthStart, monthEnd, today),
     [habits, logs, monthStart, monthEnd, today]
   );
+
+  const getHabitDots = useCallback((day: Date) => {
+    const dateKey = formatDateOnly(day);
+    const isFutureDay = day > today;
+
+    return habits
+      .map((habit) => {
+        if (habit.scheduling_type === 'fixed_weekdays') {
+          if (!isHabitScheduledOnDate(habit, day)) return null;
+          const log = logsByHabitAndDate.get(`${habit.id}:${dateKey}`);
+          const color = log?.status === 'success'
+            ? 'bg-green-500'
+            : log?.status === 'partial'
+              ? 'bg-yellow-500'
+              : log?.status === 'fail'
+                ? 'bg-red-500'
+                : isFutureDay
+                  ? 'bg-gray-300 dark:bg-gray-600'
+                  : 'bg-red-500';
+          const label = log?.status === 'success'
+            ? 'Done'
+            : log?.status === 'partial'
+              ? 'Partial'
+              : log?.status === 'fail'
+                ? 'Missed'
+                : isFutureDay
+                  ? 'Future / pending'
+                  : 'Missed (unlogged)';
+          return { id: habit.id, title: habit.title, color, label };
+        }
+
+        if (!isHabitActiveOnDate(habit, day)) return null;
+        const log = logsByHabitAndDate.get(`${habit.id}:${dateKey}`);
+        if (!log) return null;
+        const color = log.status === 'success' ? 'bg-green-500' : log.status === 'partial' ? 'bg-yellow-500' : 'bg-red-500';
+        const label = log.status === 'success' ? 'Done' : log.status === 'partial' ? 'Partial' : 'Missed';
+        return { id: habit.id, title: habit.title, color, label };
+      })
+      .filter((dot): dot is { id: string; title: string; color: string; label: string } => dot !== null)
+      .slice(0, 6);
+  }, [habits, logsByHabitAndDate, today]);
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
@@ -185,6 +232,7 @@ export default function CalendarPage() {
               const dateKey = formatDateOnly(day);
               const dayAggregate = getDailyAggregate(habits, logs, day, today, signupDate);
               const styles = STATUS_STYLES[dayAggregate.status];
+              const dots = getHabitDots(day);
               const isCurrentMonth = isSameMonth(day, currentMonth);
               const isToday = dateKey === formatDateOnly(today);
 
@@ -198,8 +246,14 @@ export default function CalendarPage() {
                   title={`${format(day, 'PPP')}: ${styles.label}`}
                 >
                   <span className={`text-xs font-semibold ${styles.text}`}>{format(day, 'd')}</span>
-                  <div className="min-h-[10px] flex mt-1 items-center justify-center">
-                    <span className={`w-1.5 h-1.5 rounded-full ${styles.dot}`} />
+                  <div className="min-h-[10px] flex gap-0.5 mt-1 flex-wrap justify-center">
+                    {dots.length > 0 ? dots.map((dot) => (
+                      <span
+                        key={dot.id}
+                        className={`w-1.5 h-1.5 rounded-full ${dot.color}`}
+                        title={`${dot.title}: ${dot.label}`}
+                      />
+                    )) : <span className={`w-1.5 h-1.5 rounded-full ${styles.dot}`} />}
                   </div>
                 </button>
               );
