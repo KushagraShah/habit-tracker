@@ -8,10 +8,8 @@ import {
   fetchLogs,
   isHabitScheduledOnDate,
   upsertLog,
-  computeWeeklySummary,
-  computeWeeklyScores,
 } from '../lib/habits';
-import { computeDayScore } from '../utils/scoring';
+import { computeDayScore, getWeeklyAggregate, getWeeklyTrendData } from '../utils/scoring';
 import type { Habit, HabitLog, HabitStatus } from '../types';
 import {
   formatDateOnly,
@@ -152,13 +150,13 @@ export default function TodayPage() {
   const dayScore = computeDayScore(habits, logs, viewDate, today, signupDate);
 
   const weeklySummary = useMemo(
-    () => computeWeeklySummary(habits, logs, weekStart, weekEnd),
-    [habits, logs, weekStart, weekEnd]
+    () => getWeeklyAggregate(habits, logs, weekStart, today),
+    [habits, logs, weekStart, today]
   );
 
   const weeklyTrend = useMemo(
-    () => computeWeeklyScores(habits, logs, trendWeeks),
-    [habits, logs, trendWeeks]
+    () => getWeeklyTrendData(habits, logs, trendWeeks, today),
+    [habits, logs, trendWeeks, today]
   );
 
   const barDays = Array.from({ length: DAYS_IN_BAR }, (_, i) => {
@@ -225,20 +223,23 @@ export default function TodayPage() {
           <div className="flex-1">
             <div className="flex items-center gap-4 text-sm">
               <span className="text-green-600 dark:text-green-400 font-semibold">
-                ✅ {weeklySummary.successCount}
+                ✅ {weeklySummary.doneCount}
               </span>
               <span className="text-yellow-600 dark:text-yellow-400 font-semibold">
                 🟡 {weeklySummary.partialCount}
               </span>
               <span className="text-red-600 dark:text-red-400 font-semibold">
-                ❌ {weeklySummary.missCount}
+                ❌ {weeklySummary.missedCount}
               </span>
-              {weeklySummary.totalDue > 0 && (
+              {weeklySummary.dueUnits > 0 && (
                 <span className="text-gray-400 text-xs">
-                  / {weeklySummary.totalDue} due
+                  · {weeklySummary.dueUnits} due units
                 </span>
               )}
             </div>
+            {weeklySummary.remainingTarget > 0 && (
+              <div className="text-xs text-gray-400 mt-1">Remaining target: {weeklySummary.remainingTarget}</div>
+            )}
           </div>
           <div className="text-right">
             <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
@@ -247,7 +248,7 @@ export default function TodayPage() {
             <div className="text-xs text-gray-400">score</div>
           </div>
         </div>
-        {weeklySummary.totalDue > 0 && (
+        {weeklySummary.dueUnits > 0 && (
           <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mt-2">
             <div
               className="h-full rounded-full bg-indigo-500"
@@ -325,14 +326,14 @@ export default function TodayPage() {
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Weekly score trend</h3>
           <div className="flex items-end gap-1.5 h-24">
             {weeklyTrend.map((week, i) => {
-              const height = Math.max(week.score, 2);
+              const height = week.score == null ? 0 : Math.max(week.score, 2);
               return (
                 <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-[10px] text-gray-400 font-medium">{week.score}%</span>
+                  <span className="text-[10px] text-gray-400 font-medium">{week.score == null ? '—' : `${week.score}%`}</span>
                   <div
-                    className="w-full rounded-t bg-indigo-400 dark:bg-indigo-500 min-h-[4px] transition-all"
+                    className={`w-full rounded-t min-h-[4px] transition-all ${week.score == null ? 'bg-gray-300 dark:bg-gray-700' : 'bg-indigo-400 dark:bg-indigo-500'}`}
                     style={{ height: `${(height / 100) * 70}px` }}
-                    title={`${formatWeekRange(week.weekStart)}: ${week.score}%`}
+                    title={`${formatWeekRange(week.weekStart)}: ${week.score == null ? 'No data' : `${week.score}%`}`}
                   />
                   <span className="text-[9px] text-gray-400 leading-tight text-center truncate w-full">
                     {format(week.weekStart, 'M/d')}

@@ -376,6 +376,7 @@ export default function HabitsPage() {
               {schedulingType === 'flexible_weekly' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Target times per week</label>
+                  <p className="text-xs text-gray-400 mb-2">Any logged day counts. Weekly score is calculated against this target.</p>
                   <div className="flex gap-1 flex-wrap">
                     {[1, 2, 3, 4, 5, 6, 7].map((n) => (
                       <button key={n} type="button" onClick={() => setWeeklyTarget(n)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${weeklyTarget === n ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>{n}x</button>
@@ -423,9 +424,18 @@ export default function HabitsPage() {
             <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2">{pauseTarget.title}</h3>
             <p className="text-xs text-gray-400 mb-4">Manage pause options</p>
             <div className="space-y-2">
-              <button onClick={() => setPauseAction('indefinite')} className="w-full px-4 py-3 rounded-lg text-left text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-100 dark:border-gray-700">⏸ Pause indefinitely</button>
-              <button onClick={() => setPauseAction('until')} className="w-full px-4 py-3 rounded-lg text-left text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-100 dark:border-gray-700">📅 Pause until date</button>
-              <button onClick={() => setPauseAction('resume')} className="w-full px-4 py-3 rounded-lg text-left text-sm font-medium text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors border border-green-100 dark:border-green-700">▶️ Resume habit</button>
+              {pauseTarget.is_active ? (
+                <>
+                  <button onClick={() => setPauseAction('indefinite')} className="w-full px-4 py-3 rounded-lg text-left text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-100 dark:border-gray-700">⏸ Pause indefinitely</button>
+                  <button onClick={() => setPauseAction('until')} className="w-full px-4 py-3 rounded-lg text-left text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-100 dark:border-gray-700">📅 Pause until date</button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => setPauseAction('resume')} className="w-full px-4 py-3 rounded-lg text-left text-sm font-medium text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors border border-green-100 dark:border-green-700">▶️ Resume habit</button>
+                  <button onClick={() => setPauseAction('until')} className="w-full px-4 py-3 rounded-lg text-left text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-100 dark:border-gray-700">📅 Change pause date</button>
+                  <button onClick={() => setPauseAction('indefinite')} className="w-full px-4 py-3 rounded-lg text-left text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-100 dark:border-gray-700">⏸ Pause indefinitely</button>
+                </>
+              )}
             </div>
             <button onClick={() => setPauseTarget(null)} className="w-full mt-3 px-4 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">Cancel</button>
           </div>
@@ -473,8 +483,8 @@ export default function HabitsPage() {
                     <p className="text-xs text-gray-400">{habit.scheduling_type === 'fixed_weekdays' ? formatRecurrence(habit.recurrence) : `${habit.weekly_target}x / week`}</p>
                     <p className="text-xs text-gray-400">{habit.start_date} → {habit.end_date}</p>
                     <div className="flex gap-3 mt-1.5">
-                      <span className="text-xs text-green-600 dark:text-green-400 font-medium">🔥 {streaks.successStreak}</span>
-                      <span className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">💪 {streaks.consistencyStreak}</span>
+                      <span className="text-xs text-green-600 dark:text-green-400 font-medium">🔥 Success {streaks.successStreak}</span>
+                      <span className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">💪 Consistency {streaks.consistencyStreak}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">

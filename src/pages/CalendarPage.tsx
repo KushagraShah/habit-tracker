@@ -12,57 +12,51 @@ import {
   subMonths,
 } from 'date-fns';
 import { useAuth } from '../contexts/useAuth';
-import { fetchHabits, fetchLogs, isHabitScheduledOnDate } from '../lib/habits';
-import { computeDayScore } from '../utils/scoring';
-import type { Habit, HabitLog, HabitStatus } from '../types';
+import { fetchHabits, fetchLogs } from '../lib/habits';
+import { getDailyAggregate, getMonthlyAggregate } from '../utils/scoring';
+import type { Habit, HabitLog } from '../types';
 import { formatDateOnly, todayLocal } from '../utils/date';
 
 const WEEK_STARTS_ON = 1;
 
-const STATUS_STYLES: Record<string, { cell: string; text: string; label: string }> = {
+const STATUS_STYLES: Record<string, { cell: string; text: string; label: string; dot: string }> = {
   success: {
     cell: 'bg-green-100 dark:bg-green-900/30 border-green-200 dark:border-green-800',
     text: 'text-green-700 dark:text-green-300',
     label: 'Done',
+    dot: 'bg-green-500',
   },
   partial: {
     cell: 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-800',
     text: 'text-yellow-700 dark:text-yellow-300',
     label: 'Partial',
+    dot: 'bg-yellow-500',
   },
   fail: {
     cell: 'bg-red-100 dark:bg-red-900/30 border-red-200 dark:border-red-800',
     text: 'text-red-700 dark:text-red-300',
     label: 'Missed',
-  },
-  none: {
-    cell: 'bg-gray-100 dark:bg-gray-800 border-gray-200 dark:border-gray-700',
-    text: 'text-gray-400',
-    label: 'No data',
+    dot: 'bg-red-500',
   },
   no_habits: {
     cell: 'bg-gray-50 dark:bg-gray-900/60 border-gray-100 dark:border-gray-800',
     text: 'text-gray-400',
     label: 'Rest / inactive',
+    dot: 'bg-gray-300 dark:bg-gray-600',
   },
   before_habits: {
     cell: 'bg-gray-50 dark:bg-gray-900/60 border-gray-100 dark:border-gray-800',
     text: 'text-gray-400',
     label: 'Before habits',
+    dot: 'bg-gray-300 dark:bg-gray-600',
   },
   future: {
     cell: 'bg-gray-50 dark:bg-gray-900/60 border-gray-100 dark:border-gray-800',
     text: 'text-gray-400',
     label: 'Future',
+    dot: 'bg-gray-300 dark:bg-gray-600',
   },
 };
-
-function dotColor(status?: HabitStatus): string {
-  if (status === 'success') return 'bg-green-500';
-  if (status === 'partial') return 'bg-yellow-500';
-  if (status === 'fail') return 'bg-red-500';
-  return 'bg-gray-300 dark:bg-gray-600';
-}
 
 export default function CalendarPage() {
   const { user, signupDate } = useAuth();
@@ -74,13 +68,15 @@ export default function CalendarPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const { calendarStart, calendarEnd } = useMemo(() => {
+  const { monthStart, monthEnd, calendarStart, calendarEnd } = useMemo(() => {
     const computedMonthStart = startOfMonth(currentMonth);
     const computedMonthEnd = endOfMonth(currentMonth);
     const computedCalendarStart = startOfWeek(computedMonthStart, { weekStartsOn: WEEK_STARTS_ON });
     const computedCalendarEnd = endOfWeek(computedMonthEnd, { weekStartsOn: WEEK_STARTS_ON });
 
     return {
+      monthStart: computedMonthStart,
+      monthEnd: computedMonthEnd,
       calendarStart: computedCalendarStart,
       calendarEnd: computedCalendarEnd,
     };
@@ -98,7 +94,6 @@ export default function CalendarPage() {
 
     try {
       const end = calendarEnd > today ? calendarEnd : today;
-
       const [habitsData, logsData] = await Promise.all([
         fetchHabits(user.id),
         fetchLogs(user.id, formatDateOnly(calendarStart), formatDateOnly(end)),
@@ -119,39 +114,10 @@ export default function CalendarPage() {
 
   const activeHabits = habits.filter((habit) => habit.is_active);
 
-  const logsByHabitAndDate = useMemo(() => {
-    const map = new Map<string, HabitLog>();
-    logs.forEach((log) => map.set(`${log.habit_id}:${log.log_date}`, log));
-    return map;
-  }, [logs]);
-
-  const dayStats = useMemo(() => {
-    const scoredDays = visibleDays
-      .filter((day) => isSameMonth(day, currentMonth))
-      .map((day) => computeDayScore(habits, logs, day, today, signupDate));
-
-    const dueDays = scoredDays.filter((score) => score.maxScore > 0);
-    const completedDays = dueDays.filter((score) => score.status === 'success').length;
-    const partialDays = dueDays.filter((score) => score.status === 'partial').length;
-    const missedDays = dueDays.filter((score) => score.status === 'fail').length;
-    const average = dueDays.length
-      ? Math.round(dueDays.reduce((sum, score) => sum + score.percent, 0) / dueDays.length)
-      : 0;
-
-    return { completedDays, partialDays, missedDays, average, dueDays: dueDays.length };
-  }, [currentMonth, habits, logs, signupDate, today, visibleDays]);
-
-  const getHabitDots = (day: Date) => {
-    const dateKey = formatDateOnly(day);
-    return habits
-      .filter((habit) => isHabitScheduledOnDate(habit, day))
-      .slice(0, 6)
-      .map((habit) => ({
-        id: habit.id,
-        title: habit.title,
-        color: dotColor(logsByHabitAndDate.get(`${habit.id}:${dateKey}`)?.status),
-      }));
-  };
+  const monthStats = useMemo(
+    () => getMonthlyAggregate(habits, logs, monthStart, monthEnd, today),
+    [habits, logs, monthStart, monthEnd, today]
+  );
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
@@ -190,11 +156,11 @@ export default function CalendarPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
         <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 p-3">
           <p className="text-xs text-gray-400">Avg. score</p>
-          <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">{dayStats.average}%</p>
+          <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">{monthStats.scorePercent}%</p>
         </div>
         <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 p-3">
-          <p className="text-xs text-gray-400">Done</p>
-          <p className="text-xl font-bold text-green-600 dark:text-green-400">{dayStats.completedDays}</p>
+          <p className="text-xs text-gray-400">Done entries</p>
+          <p className="text-xl font-bold text-green-600 dark:text-green-400">{monthStats.doneCount}</p>
         </div>
         <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 p-3">
           <p className="text-xs text-gray-400">Active habits</p>
@@ -217,9 +183,8 @@ export default function CalendarPage() {
           <div className="grid grid-cols-7 gap-1.5">
             {visibleDays.map((day) => {
               const dateKey = formatDateOnly(day);
-              const score = computeDayScore(habits, logs, day, today, signupDate);
-              const styles = STATUS_STYLES[score.status];
-              const dots = getHabitDots(day);
+              const dayAggregate = getDailyAggregate(habits, logs, day, today, signupDate);
+              const styles = STATUS_STYLES[dayAggregate.status];
               const isCurrentMonth = isSameMonth(day, currentMonth);
               const isToday = dateKey === formatDateOnly(today);
 
@@ -233,10 +198,8 @@ export default function CalendarPage() {
                   title={`${format(day, 'PPP')}: ${styles.label}`}
                 >
                   <span className={`text-xs font-semibold ${styles.text}`}>{format(day, 'd')}</span>
-                  <div className="min-h-[10px] flex gap-0.5 mt-1 flex-wrap justify-center">
-                    {dots.map((dot) => (
-                      <span key={dot.id} className={`w-1.5 h-1.5 rounded-full ${dot.color}`} title={dot.title} />
-                    ))}
+                  <div className="min-h-[10px] flex mt-1 items-center justify-center">
+                    <span className={`w-1.5 h-1.5 rounded-full ${styles.dot}`} />
                   </div>
                 </button>
               );
@@ -251,11 +214,9 @@ export default function CalendarPage() {
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-50 border border-gray-200" /> Rest / inactive</span>
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-100 border border-gray-200" /> Future</span>
             </div>
-            {dayStats.dueDays > 0 && (
-              <p className="text-center text-xs text-gray-400 mt-3">
-                Due entries this month: {dayStats.completedDays} done, {dayStats.partialDays} partial, {dayStats.missedDays} missed.
-              </p>
-            )}
+            <p className="text-center text-xs text-gray-400 mt-3">
+              Tracked this month: {monthStats.doneCount} done, {monthStats.partialCount} partial, {monthStats.missedCount} missed. Score: {monthStats.scorePercent}%.
+            </p>
           </div>
         </>
       )}
