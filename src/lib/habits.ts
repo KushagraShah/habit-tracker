@@ -95,15 +95,12 @@ export function computeHabitStreaks(
   let successBroken = false;
   let consistencyBroken = false;
 
-  const todayStart = startOfLocalDay(today);
   const current = startOfLocalDay(today);
 
-  // Go backwards up to 365 days
-  for (let i = 0; i < 365; i++) {
+  // Start from yesterday. Today shouldn't affect streaks since the day isn't over.
+  for (let i = 1; i < 366; i++) {
     const day = new Date(current);
     day.setDate(day.getDate() - i);
-
-    if (day > todayStart) continue; // skip future
 
     // Check if habit is in date range
     if (day < parseDateOnly(habit.start_date)) break;

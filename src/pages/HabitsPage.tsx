@@ -69,9 +69,10 @@ export default function HabitsPage() {
   const [pauseAction, setPauseAction] = useState<'indefinite' | 'until' | 'resume' | null>(null);
   const [pauseUntilDate, setPauseUntilDate] = useState('');
 
-  const today = todayLocal();
+  const todayRef = useRef(todayLocal());
 
   const loadHabits = useCallback(async () => {
+    const today = todayRef.current;
     if (!user) return;
     setLoading(true);
     setError('');
@@ -98,7 +99,7 @@ export default function HabitsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, today]);
+  }, [user]);
 
   useEffect(() => {
     void loadHabits();
@@ -239,7 +240,7 @@ export default function HabitsPage() {
     if (!pauseTarget || !pauseAction) return;
     try {
       setError('');
-      const todayStr = formatDateOnly(today);
+      const todayStr = formatDateOnly(todayRef.current);
       const pausePeriods = pauseTarget.pause_periods ?? [];
 
       if (pauseAction === 'resume') {
@@ -565,9 +566,9 @@ export default function HabitsPage() {
             <p className="text-xs text-gray-400 mb-4">The habit will automatically resume after this date.</p>
             <input
               type="date"
-              value={pauseUntilDate || formatDateOnly(today)}
+              value={pauseUntilDate || formatDateOnly(todayRef.current)}
               onChange={(e) => setPauseUntilDate(e.target.value)}
-              min={formatDateOnly(today)}
+              min={formatDateOnly(todayRef.current)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-gray-800 dark:text-gray-100 text-sm mb-4"
             />
             <div className="flex gap-3">
