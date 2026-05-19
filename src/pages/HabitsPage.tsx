@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/useAuth';
 import {
   createHabit,
   deleteHabit,
+  fetchAllLogs,
   fetchHabits,
   fetchLogs,
   updateHabit,
@@ -60,6 +61,8 @@ export default function HabitsPage() {
   const [allLogs, setAllLogs] = useState<Record<string, import('../types').HabitLog[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [exportError, setExportError] = useState('');
+  const [exporting, setExporting] = useState(false);
   const [formError, setFormError] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
@@ -330,17 +333,68 @@ export default function HabitsPage() {
 
   const submitDisabled = (schedulingType === 'fixed_weekdays' && selectedDays.length === 0) || !title.trim();
 
+  const handleExportData = async () => {
+    if (!user) return;
+    setExportError('');
+    setExporting(true);
+
+    try {
+      const [habitsData, logsData] = await Promise.all([
+        fetchHabits(user.id),
+        fetchAllLogs(user.id),
+      ]);
+
+      const payload = {
+        app: 'habit-tracker',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        userId: user.id,
+        habits: habitsData,
+        logs: logsData,
+      };
+
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `habit-tracker-export-${formatDateOnly(todayLocal())}.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Failed to export data');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">My Habits</h2>
-        <button
-          onClick={() => { resetForm(); setShowForm(true); }}
-          className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
-        >
-          + New Habit
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportData}
+            disabled={exporting}
+            className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors disabled:opacity-60"
+          >
+            {exporting ? 'Exporting…' : 'Export data'}
+          </button>
+          <button
+            onClick={() => { resetForm(); setShowForm(true); }}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+          >
+            + New Habit
+          </button>
+        </div>
       </div>
+
+      {exportError && (
+        <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-700 rounded-lg px-4 py-2 mb-4 text-sm text-red-700 dark:text-red-300">
+          {exportError}
+        </div>
+      )}
 
       {error && (
         <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-700 rounded-lg px-4 py-2 mb-4 text-sm text-red-700 dark:text-red-300">

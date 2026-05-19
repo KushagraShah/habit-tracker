@@ -168,6 +168,16 @@ export async function fetchLogs(
   return data ?? [];
 }
 
+export async function fetchAllLogs(userId: string): Promise<HabitLog[]> {
+  const { data, error } = await supabase
+    .from('habit_logs')
+    .select('*')
+    .eq('user_id', userId)
+    .order('log_date', { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function upsertLog(
   habitId: string,
   userId: string,
