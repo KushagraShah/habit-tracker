@@ -50,15 +50,17 @@ export default function Layout() {
               key={item.to}
               to={item.to}
               className={({ isActive }) =>
-                `flex-1 flex flex-col items-center py-3 text-xs transition-colors ${
+                `flex-1 flex flex-col items-center py-3 text-xs transition-colors relative ${
                   isActive
-                    ? 'text-indigo-600 font-semibold'
+                    ? 'text-indigo-600 dark:text-indigo-400'
                     : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                } after:content-[""] after:absolute after:-top-0.5 after:left-1/2 after:-translate-x-1/2 after:w-8 after:h-1 after:rounded-full after:bg-indigo-500 after:opacity-0 after:transition-opacity ${
+                  isActive ? 'after:opacity-100' : ''
                 }`
               }
             >
-              <span className="text-lg mb-0.5">{item.icon}</span>
-              {item.label}
+              <span className={`text-lg mb-0.5`}>{item.icon}</span>
+              <span className={`font-semibold`}>{item.label}</span>
             </NavLink>
           ))}
         </div>

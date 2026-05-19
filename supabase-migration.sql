@@ -66,6 +66,8 @@ CREATE TABLE habits (
   description TEXT,
   emoji TEXT DEFAULT '💪',
   recurrence JSONB NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(recurrence) = 'array'),
+  scheduling_type TEXT NOT NULL DEFAULT 'fixed_weekdays' CHECK (scheduling_type IN ('fixed_weekdays', 'flexible_weekly')),
+  weekly_target INT DEFAULT NULL CHECK (weekly_target IS NULL OR (weekly_target >= 1 AND weekly_target <= 7)),
   success_label TEXT,
   partial_label TEXT,
   fail_label TEXT,
@@ -73,6 +75,7 @@ CREATE TABLE habits (
   -- Default far in the future so habits do not silently expire after 30 days.
   end_date DATE NOT NULL DEFAULT (CURRENT_DATE + INTERVAL '10 years'),
   pause_periods JSONB NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(pause_periods) = 'array'),
+  pause_until DATE DEFAULT NULL,
   sort_order INT DEFAULT 0,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now(),
@@ -163,3 +166,9 @@ CREATE POLICY "Users can update own logs for own habits"
 CREATE POLICY "Users can delete own logs"
   ON habit_logs FOR DELETE
   USING (auth.uid() = user_id);
+
+-- Migration for existing databases: Add new columns to habits table
+-- Run these ALTER statements separately if you already have the habits table
+-- ALTER TABLE habits ADD COLUMN IF NOT EXISTS scheduling_type TEXT NOT NULL DEFAULT 'fixed_weekdays' CHECK (scheduling_type IN ('fixed_weekdays', 'flexible_weekly'));
+-- ALTER TABLE habits ADD COLUMN IF NOT EXISTS weekly_target INT DEFAULT NULL CHECK (weekly_target IS NULL OR (weekly_target >= 1 AND weekly_target <= 7));
+-- ALTER TABLE habits ADD COLUMN IF NOT EXISTS pause_until DATE DEFAULT NULL;

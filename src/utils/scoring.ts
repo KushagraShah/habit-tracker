@@ -2,21 +2,6 @@ import type { Habit, HabitLog, DayScore } from '../types';
 import { isHabitScheduledOnDate } from '../lib/habits';
 import { formatDateOnly, startOfLocalDay, parseDateOnly } from './date';
 
-const STREAK_POLICY: Record<DayScore['status'], 'count' | 'skip' | 'break'> = {
-  success: 'count',
-  partial: 'count',
-  no_habits: 'count',
-  fail: 'break',
-  before_habits: 'break',
-  future: 'skip',
-  none: 'skip',
-};
-
-export interface StreakChain {
-  count: number;
-  dates: Set<string>;
-}
-
 /**
  * Day scoring rules:
  * - before_habits: date is before signup or before any habit start date
@@ -83,7 +68,7 @@ export function computeDayScore(
   }
 
   const maxScore = dueHabits.length;
-  const percent = (achieved / maxScore) * 100;
+  const percent = maxScore > 0 ? (achieved / maxScore) * 100 : 100;
 
   let status: DayScore['status'];
   if (anyFail) status = 'fail';
@@ -99,55 +84,14 @@ export function computeDayScore(
   };
 }
 
-/**
- * Streak logic:
- * - starts from today, goes backwards
- * - fail breaks streak
- * - success/partial/no_habits all continue streak
- * - before_habits stops evaluation
- */
-export function computeStreak(
-  habits: Habit[],
-  logs: HabitLog[],
-  today: Date,
-  signupDate?: Date | null
-): number {
-  return computeStreakChain(habits, logs, today, signupDate).count;
+export function isDayPastToday(day: Date, today: Date): boolean {
+  return startOfLocalDay(day) < startOfLocalDay(today);
 }
 
-export function computeStreakDates(
-  habits: Habit[],
-  logs: HabitLog[],
-  today: Date,
-  signupDate?: Date | null
-): Set<string> {
-  return computeStreakChain(habits, logs, today, signupDate).dates;
+export function isDayFuture(day: Date, today: Date): boolean {
+  return startOfLocalDay(day) > startOfLocalDay(today);
 }
 
-export function computeStreakChain(
-  habits: Habit[],
-  logs: HabitLog[],
-  today: Date,
-  signupDate?: Date | null,
-  maxDays = 365
-): StreakChain {
-  const dates = new Set<string>();
-  const current = startOfLocalDay(today);
-  let count = 0;
-
-  for (let i = 0; i < maxDays; i++) {
-    const score = computeDayScore(habits, logs, current, today, signupDate);
-
-    const decision = STREAK_POLICY[score.status];
-    if (decision === 'break') break;
-
-    if (decision === 'count') {
-      dates.add(formatDateOnly(current));
-      count += 1;
-    }
-
-    current.setDate(current.getDate() - 1);
-  }
-
-  return { count, dates };
+export function isDayToday(day: Date, today: Date): boolean {
+  return startOfLocalDay(day).getTime() === startOfLocalDay(today).getTime();
 }

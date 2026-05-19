@@ -1,3 +1,5 @@
+export type SchedulingType = 'fixed_weekdays' | 'flexible_weekly';
+
 export interface Habit {
   id: string;
   user_id: string;
@@ -5,12 +7,15 @@ export interface Habit {
   description: string | null;
   emoji: string;
   recurrence: RecurrenceDay[];
+  scheduling_type: SchedulingType;
+  weekly_target: number | null;
   success_label: string | null;
   partial_label: string | null;
   fail_label: string | null;
   start_date: string;
   end_date: string;
   pause_periods: PausePeriod[] | null;
+  pause_until: string | null;
   sort_order: number;
   is_active: boolean;
   created_at: string;
@@ -62,3 +67,29 @@ export const EMOJIS = [
   '📝', '🧹', '💻', '📖', '🎮', '🧭', '🎭', '🌍',
   '🐶', '🐱', '🌸', '🍳', '🎧', '📷', '✈️', '🏡',
 ];
+
+export interface StreakInfo {
+  successStreak: number;
+  consistencyStreak: number;
+}
+
+export interface WeeklySummary {
+  weekStart: string;
+  weekEnd: string;
+  successCount: number;
+  partialCount: number;
+  missCount: number;
+  totalDue: number;
+  scorePercent: number;
+}
+
+export type DayState =
+  | 'due_missed'
+  | 'due_done'
+  | 'due_partial'
+  | 'not_due'
+  | 'future'
+  | 'before_start'
+  | 'after_end'
+  | 'paused'
+  | 'rest';

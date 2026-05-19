@@ -14,16 +14,16 @@ import {
 import { useAuth } from '../contexts/useAuth';
 import { fetchHabits, fetchLogs, isHabitScheduledOnDate } from '../lib/habits';
 import { computeDayScore } from '../utils/scoring';
-import type { DayScore, Habit, HabitLog, HabitStatus } from '../types';
+import type { Habit, HabitLog, HabitStatus } from '../types';
 import { formatDateOnly, todayLocal } from '../utils/date';
 
 const WEEK_STARTS_ON = 1;
 
-const STATUS_STYLES: Record<DayScore['status'], { cell: string; text: string; label: string }> = {
+const STATUS_STYLES: Record<string, { cell: string; text: string; label: string }> = {
   success: {
     cell: 'bg-green-100 dark:bg-green-900/30 border-green-200 dark:border-green-800',
     text: 'text-green-700 dark:text-green-300',
-    label: 'Success',
+    label: 'Done',
   },
   partial: {
     cell: 'bg-yellow-100 dark:bg-yellow-900/30 border-yellow-200 dark:border-yellow-800',
@@ -43,7 +43,7 @@ const STATUS_STYLES: Record<DayScore['status'], { cell: string; text: string; la
   no_habits: {
     cell: 'bg-gray-50 dark:bg-gray-900/60 border-gray-100 dark:border-gray-800',
     text: 'text-gray-400',
-    label: 'Rest day',
+    label: 'Rest / inactive',
   },
   before_habits: {
     cell: 'bg-gray-50 dark:bg-gray-900/60 border-gray-100 dark:border-gray-800',
@@ -193,7 +193,7 @@ export default function CalendarPage() {
           <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">{dayStats.average}%</p>
         </div>
         <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 p-3">
-          <p className="text-xs text-gray-400">Perfect days</p>
+          <p className="text-xs text-gray-400">Done</p>
           <p className="text-xl font-bold text-green-600 dark:text-green-400">{dayStats.completedDays}</p>
         </div>
         <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 p-3">
@@ -245,14 +245,15 @@ export default function CalendarPage() {
 
           <div className="mt-5 rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 p-4">
             <div className="flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400 justify-center">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-100 border border-green-200" /> Success</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-100 border border-green-200" /> Done</span>
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-yellow-100 border border-yellow-200" /> Partial</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100 border border-red-200" /> Missed / unlogged</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-50 border border-gray-200" /> Rest / future</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-red-100 border border-red-200" /> Missed</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-50 border border-gray-200" /> Rest / inactive</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-100 border border-gray-200" /> Future</span>
             </div>
             {dayStats.dueDays > 0 && (
               <p className="text-center text-xs text-gray-400 mt-3">
-                {dayStats.completedDays} perfect, {dayStats.partialDays} partial, {dayStats.missedDays} missed due days this month.
+                Due entries this month: {dayStats.completedDays} done, {dayStats.partialDays} partial, {dayStats.missedDays} missed.
               </p>
             )}
           </div>
