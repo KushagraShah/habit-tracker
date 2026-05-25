@@ -344,8 +344,8 @@ export default function HabitsPage() {
     if (!user || index === 0) return;
     const above = habits[index - 1];
     try {
-      // Use array index as the new order_index value to handle duplicate/zero order_index
-      await swapOrderIndex(user.id, habit.id, index - 1, above.id, index);
+      // Swap actual order_index values between the two habits
+      await swapOrderIndex(user.id, habit.id, habit.order_index, above.id, above.order_index);
       await loadHabits();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reorder');
@@ -356,8 +356,8 @@ export default function HabitsPage() {
     if (!user || index === habits.length - 1) return;
     const below = habits[index + 1];
     try {
-      // Use array index as the new order_index value to handle duplicate/zero order_index
-      await swapOrderIndex(user.id, habit.id, index + 1, below.id, index);
+      // Swap actual order_index values between the two habits
+      await swapOrderIndex(user.id, habit.id, habit.order_index, below.id, below.order_index);
       await loadHabits();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reorder');
