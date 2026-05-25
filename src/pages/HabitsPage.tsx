@@ -11,6 +11,7 @@ import {
   fetchLogs,
   updateHabit,
   computeHabitStreaks,
+  swapOrderIndex,
 } from '../lib/habits';
 import type { Habit, HabitCreateInput, PausePeriod, RecurrenceDay, SchedulingType } from '../types';
 import { DAYS_OF_WEEK, EMOJIS } from '../types';
@@ -83,6 +84,8 @@ export default function HabitsPage() {
   const [endDate, setEndDate] = useState(getDefaultEndDate());
   const [schedulingType, setSchedulingType] = useState<SchedulingType>('fixed_weekdays');
   const [weeklyTarget, setWeeklyTarget] = useState(4);
+  const [eligibleWeekdays, setEligibleWeekdays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]); // 0=Sun...6=Sat
+  const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const [deleteTarget, setDeleteTarget] = useState<Habit | null>(null);
   const [pauseTarget, setPauseTarget] = useState<Habit | null>(null);
   const [pauseAction, setPauseAction] = useState<'indefinite' | 'until' | 'resume' | null>(null);
@@ -153,6 +156,7 @@ export default function HabitsPage() {
     setEndDate(getDefaultEndDate());
     setSchedulingType('fixed_weekdays');
     setWeeklyTarget(4);
+    setEligibleWeekdays([0, 1, 2, 3, 4, 5, 6]);
     setEditingHabit(null);
     setFormError('');
     setShowForm(false);
@@ -174,6 +178,7 @@ export default function HabitsPage() {
     setEndDate(habit.end_date);
     setSchedulingType(habit.scheduling_type || 'fixed_weekdays');
     setWeeklyTarget(habit.weekly_target || 4);
+    setEligibleWeekdays(habit.eligible_weekdays ?? [0, 1, 2, 3, 4, 5, 6]);
     setEditingHabit(habit);
     setFormError('');
     setShowForm(true);
@@ -241,6 +246,8 @@ export default function HabitsPage() {
       start_date: startDate,
       end_date: endDate,
       sort_order: editingHabit?.sort_order ?? habits.length,
+      order_index: editingHabit?.order_index ?? habits.length,
+      eligible_weekdays: schedulingType === 'flexible_weekly' ? eligibleWeekdays : null,
       is_active: editingHabit?.is_active ?? true,
       pause_periods: editingHabit?.pause_periods ?? [],
       pause_until: editingHabit?.pause_until ?? null,
@@ -332,6 +339,28 @@ export default function HabitsPage() {
   };
 
   const submitDisabled = (schedulingType === 'fixed_weekdays' && selectedDays.length === 0) || !title.trim();
+
+  const handleMoveUp = async (habit: Habit, index: number) => {
+    if (!user || index === 0) return;
+    const above = habits[index - 1];
+    try {
+      await swapOrderIndex(user.id, habit.id, habit.order_index, above.id, above.order_index);
+      await loadHabits();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reorder');
+    }
+  };
+
+  const handleMoveDown = async (habit: Habit, index: number) => {
+    if (!user || index === habits.length - 1) return;
+    const below = habits[index + 1];
+    try {
+      await swapOrderIndex(user.id, habit.id, habit.order_index, below.id, below.order_index);
+      await loadHabits();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to reorder');
+    }
+  };
 
   const handleExportData = async () => {
     if (!user) return;
@@ -514,15 +543,30 @@ export default function HabitsPage() {
               )}
 
               {schedulingType === 'flexible_weekly' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Target times per week</label>
-                  <p className="text-xs text-gray-400 mb-2">Any logged day counts. Weekly score is calculated against this target.</p>
-                  <div className="flex gap-1 flex-wrap">
-                    {[1, 2, 3, 4, 5, 6, 7].map((n) => (
-                      <button key={n} type="button" onClick={() => setWeeklyTarget(n)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${weeklyTarget === n ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>{n}x</button>
-                    ))}
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Target times per week</label>
+                    <p className="text-xs text-gray-400 mb-2">Any logged day counts. Weekly score is calculated against this target.</p>
+                    <div className="flex gap-1 flex-wrap">
+                      {[1, 2, 3, 4, 5, 6, 7].map((n) => (
+                        <button key={n} type="button" onClick={() => setWeeklyTarget(n)} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${weeklyTarget === n ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>{n}x</button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Can be done on</label>
+                    <p className="text-xs text-gray-400 mb-2">Only show this habit on selected weekdays.</p>
+                    <div className="flex gap-1 flex-wrap">
+                      {weekdayLabels.map((label, i) => (
+                        <button key={label} type="button" onClick={() => {
+                          setEligibleWeekdays((prev) =>
+                            prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i].sort()
+                          );
+                        }} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${eligibleWeekdays.includes(i) ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}`}>{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
 
               <div className="border-t border-gray-100 dark:border-gray-700 pt-3">
@@ -628,6 +672,10 @@ export default function HabitsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">
+                    <div className="flex flex-col gap-0.5 mr-1">
+                      <button onClick={() => handleMoveUp(habit, habits.indexOf(habit))} disabled={habits.indexOf(habit) === 0} className="text-[10px] px-1 py-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-20 disabled:cursor-not-allowed" title="Move up">▲</button>
+                      <button onClick={() => handleMoveDown(habit, habits.indexOf(habit))} disabled={habits.indexOf(habit) === habits.length - 1} className="text-[10px] px-1 py-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-20 disabled:cursor-not-allowed" title="Move down">▼</button>
+                    </div>
                     <button onClick={() => openPauseMenu(habit)} className="px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Pause options">⏸</button>
                     <button onClick={() => openEdit(habit)} className="p-2 text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="Edit">✏️</button>
                     <button onClick={() => openDelete(habit)} className="p-2 text-sm text-gray-400 hover:text-red-500" title="Delete">🗑️</button>

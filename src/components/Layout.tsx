@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/useAuth';
 import { useTheme } from '../contexts/useTheme';
 
 const navItems = [
-  { to: '/today', label: 'Report', icon: '📝' },
+  { to: '/today', label: 'Today', icon: '📝' },
   { to: '/calendar', label: 'Calendar', icon: '📅' },
   { to: '/habits', label: 'Habits', icon: '⚙️' },
 ];
@@ -38,12 +38,12 @@ export default function Layout() {
       </header>
 
       {/* Main content area */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto pb-20">
         <Outlet />
       </main>
 
       {/* Bottom navigation */}
-      <nav className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shrink-0">
+      <nav className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 fixed bottom-0 left-0 right-0 z-40 pb-[env(safe-area-inset-bottom)]">
         <div className="max-w-2xl mx-auto flex">
           {navItems.map((item) => (
             <NavLink

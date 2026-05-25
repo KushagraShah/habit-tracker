@@ -1,113 +1,84 @@
 # Habit Tracker
 
-A personal habit tracking web app built with **React + Vite** + **Supabase** + **Tailwind CSS**, hosted on **GitHub Pages**.
+A mobile-first habit tracking web app built as a personal productivity tool and as an experiment in AI-assisted full-stack development.
 
-> **Disclaimer:** This project was built with AI assistance (Claude/Cline). The architecture, code, database schema, configuration, and documentation were generated and refined through AI-pair-programming during a single development session.
+The app is built with **React**, **TypeScript**, **Vite**, **Tailwind CSS**, and **Supabase**, with deployment through **GitHub Pages** and **GitHub Actions**.
 
-## Features
+> **AI-use disclaimer:** This project was built with AI assistance using **ChatGPT, Claude, DeepSeek, and Cline**. I used these tools for architecture planning, implementation, debugging, code review, documentation, and iterative feature refinement. Product direction, requirements, design decisions, validation criteria, and final acceptance were guided by me.
 
-- **Today's View** – See which habits are due today and quickly log Success / Partial / Missed
-- **Calendar View** – Monthly grid with color-coded days showing your habit completion
-- **Habits Management** – Create, edit, disable, and delete habits with day-of-week recurrence
-- **Authentication** – Email/password login via Supabase Auth (supports 1–5 users)
-- **Mobile-friendly** – Bottom tab navigation, responsive layout
-- **Free tier** – Supabase (500MB DB, 50K MAU) + GitHub Pages (unlimited static hosting)
+## Project Goals
+
+The goal of this project was to build a complete, usable web app quickly while exploring a modern AI-assisted development workflow.
+
+The focus was not just generating code, but using AI tools as part of an engineering loop:
+
+- define product requirements
+- break work into scoped implementation prompts
+- review generated changes through Git diffs
+- run lint/build validation
+- identify regressions and edge cases
+- refine data models and scoring logic
+- keep changes small, reviewable, and production-oriented
+
+## What the App Does
+
+Habit Tracker lets users create habits, log daily progress, and review consistency over time.
+
+The app supports:
+
+- daily habit logging
+- fixed weekday schedules
+- flexible “N times per week” habits
+- Done / Partial / Missed states
+- weekly and monthly progress summaries
+- calendar visualization
+- habit pausing and deletion
+- JSON data export
+- email/password authentication
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 19, TypeScript, Vite |
-| Styling | Tailwind CSS 4 |
-| Backend | Supabase (PostgreSQL + Auth) |
-| Routing | React Router v6 (HashRouter) |
-| Hosting | GitHub Pages (+ CI/CD via GitHub Actions) |
+| Area | Technology |
+|---|---|
+| Frontend | React, TypeScript, Vite |
+| Styling | Tailwind CSS |
+| Backend | Supabase PostgreSQL |
+| Auth | Supabase Auth |
+| Routing | React Router |
+| Hosting | GitHub Pages |
+| CI/CD | GitHub Actions |
+| AI-assisted development | ChatGPT, Claude, DeepSeek, Cline |
 
-## Getting Started
+## Technical Highlights
 
-### 1. Create a Supabase project
+- **Full-stack app architecture** using React frontend and Supabase backend.
+- **Typed frontend codebase** with TypeScript interfaces for habits, logs, scoring, and user state.
+- **Supabase Auth integration** with protected user-specific data access.
+- **PostgreSQL-backed persistence** for habits and habit logs.
+- **Row Level Security** so users can only access their own data.
+- **Centralized scoring logic** for daily, weekly, monthly, calendar, and streak calculations.
+- **Mobile-first UI** with bottom navigation and responsive layouts.
+- **GitHub Actions deployment** to GitHub Pages.
+- **AI-assisted development workflow** with prompt-driven implementation, review, debugging, and validation.
 
-1. Go to [supabase.com](https://supabase.com) and create a new project (free tier)
-2. In the SQL Editor, paste and run the contents of **`supabase-migration.sql`** to create the database schema
-3. Go to **Project Settings → API** and copy the **Project URL** and **anon public key**
+## AI-Assisted Development Workflow
 
-### 2. Set up environment variables
+This project was intentionally built using next-generation AI coding tools.
 
-```bash
-cp .env.example .env
-```
+The workflow included:
 
-Edit `.env` and fill in your Supabase credentials:
+1. defining product requirements and acceptance criteria
+2. generating scoped implementation prompts
+3. using AI coding agents for implementation
+4. reviewing generated diffs manually
+5. asking agents to perform self-audits against approved scope
+6. running lint/build checks after changes
+7. performing manual smoke tests before accepting commits
 
-```
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key-here
-```
+This helped me explore how AI tools can be used responsibly in software development: not as blind code generation, but as a faster engineering loop with human direction, review, and validation.
 
-### 3. Run locally
+## Local Development
 
 ```bash
 npm install
 npm run dev
-```
-
-The app will start at `http://localhost:5173/habit-tracker/`
-
-### 4. Enable Authentication
-
-In your Supabase dashboard:
-
-1. Go to **Authentication → Providers**
-2. Ensure **Email** is enabled (it is by default)
-3. Optionally disable "Confirm email" if you want instant sign-up for your small user group
-
-### 5. Deploy to GitHub Pages
-
-Push to the `main` branch. The `.github/workflows/deploy.yml` action will automatically:
-
-1. Install dependencies
-2. Build the app
-3. Deploy to GitHub Pages
-
-Make sure your GitHub repository has **Pages** enabled and set to deploy from the `gh-pages` branch.
-
-## Database Schema
-
-See `supabase-migration.sql` for the full schema. Key tables:
-
-- **profiles** – User profiles linked to Supabase Auth
-- **habits** – Habit definitions with day-of-week recurrence (JSONB)
-- **habit_logs** – Daily logs (success / partial / fail), one row per habit per day
-
-All tables have **Row Level Security (RLS)** enabled – users can only access their own data.
-
-## Project Structure
-
-```
-src/
-├── components/
-│   └── Layout.tsx          # App shell with top bar + bottom nav
-├── contexts/
-│   └── AuthContext.tsx      # Supabase Auth provider
-├── lib/
-│   ├── habits.ts           # API functions (CRUD habits + logs)
-│   └── supabase.ts         # Supabase client
-├── pages/
-│   ├── AuthPage.tsx        # Login / Register
-│   ├── TodayPage.tsx       # Today's due habits + logging
-│   ├── CalendarPage.tsx    # Monthly calendar view
-│   └── HabitsPage.tsx      # Habit management (CRUD)
-├── types/
-│   └── index.ts            # TypeScript types
-├── App.tsx                 # Router + auth guard
-├── main.tsx                # Entry point
-└── index.css               # Tailwind import
-```
-
-## Usage Flow
-
-1. **Sign up** with email + password (first user creates the account)
-2. Go to **Habits** tab → create habits with day-of-week recurrence
-3. Open **Today** tab to see what's due → tap Done / Partial / Missed
-4. Check the **Calendar** tab to see your monthly progress
-5. Disable habits you want to pause (without losing history)

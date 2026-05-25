@@ -27,7 +27,8 @@ export async function fetchHabits(userId: string): Promise<Habit[]> {
     .from('habits')
     .select('*')
     .eq('user_id', userId)
-    .order('sort_order');
+    .order('order_index', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true });
   if (error) throw error;
   return data ?? [];
 }
@@ -42,6 +43,29 @@ export async function createHabit(
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function swapOrderIndex(
+  userId: string,
+  habit1Id: string,
+  habit1Index: number,
+  habit2Id: string,
+  habit2Index: number
+): Promise<void> {
+  // Swap order_index between two habits
+  const { error: err1 } = await supabase
+    .from('habits')
+    .update({ order_index: habit2Index })
+    .eq('id', habit1Id)
+    .eq('user_id', userId);
+  if (err1) throw err1;
+
+  const { error: err2 } = await supabase
+    .from('habits')
+    .update({ order_index: habit1Index })
+    .eq('id', habit2Id)
+    .eq('user_id', userId);
+  if (err2) throw err2;
 }
 
 export async function updateHabit(

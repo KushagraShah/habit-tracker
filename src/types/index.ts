@@ -17,6 +17,8 @@ export interface Habit {
   pause_periods: PausePeriod[] | null;
   pause_until: string | null;
   sort_order: number;
+  order_index: number;
+  eligible_weekdays: number[] | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

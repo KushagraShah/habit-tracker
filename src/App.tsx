@@ -29,6 +29,10 @@ function AppRoutes() {
         element={user ? <Navigate to="/today" replace /> : <AuthPage />}
       />
       <Route
+        path="/"
+        element={<Navigate to="/today" replace />}
+      />
+      <Route
         element={
           <ProtectedRoute>
             <Layout />

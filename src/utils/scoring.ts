@@ -82,7 +82,14 @@ function isFixedDueOnDate(habit: Habit, date: Date): boolean {
 
 export function isHabitScheduledOnDate(habit: Habit, date: Date): boolean {
   if (!isHabitActiveOnDate(habit, date)) return false;
-  if (habit.scheduling_type === 'flexible_weekly') return true;
+  if (habit.scheduling_type === 'flexible_weekly') {
+    // If eligible_weekdays is set, only show on those days
+    if (habit.eligible_weekdays && habit.eligible_weekdays.length > 0) {
+      const dayOfWeek = startOfLocalDay(date).getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+      return habit.eligible_weekdays.includes(dayOfWeek);
+    }
+    return true;
+  }
   return isFixedDueOnDate(habit, date);
 }
 

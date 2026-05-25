@@ -348,7 +348,7 @@ export default function TodayPage() {
                     <h3 className="font-semibold text-gray-800 dark:text-gray-100 truncate">{habit.title}</h3>
                     {habit.description && <p className="text-xs text-gray-400 truncate">{habit.description}</p>}
                     {habit.scheduling_type === 'flexible_weekly' && (
-                      <p className="text-xs text-indigo-500">{habit.weekly_target}x / week</p>
+                      <p className="text-xs text-indigo-500">Weekly target: 0/{habit.weekly_target} · Optional today</p>
                     )}
                   </div>
                 </div>
