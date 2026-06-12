@@ -269,7 +269,7 @@ export default function CalendarPage() {
               <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-gray-100 border border-gray-200" /> Future</span>
             </div>
             <p className="text-center text-xs text-gray-400 mt-3">
-              Tracked this month: {monthStats.doneCount} done, {monthStats.partialCount} partial, {monthStats.missedCount} missed. Score: {monthStats.scorePercent}%.
+              Monthly score: {monthStats.scorePercent}% · {monthStats.doneCount} done, {monthStats.partialCount} partial, {monthStats.missedCount} missed
             </p>
           </div>
         </>

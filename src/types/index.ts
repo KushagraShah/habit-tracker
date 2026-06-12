@@ -53,12 +53,15 @@ export const DAYS_OF_WEEK: RecurrenceDay[] = [
   'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
 ];
 
+export type DailyScoreLabel = 'great' | 'good' | 'partial' | 'reset';
+
 export interface DayScore {
   total: number;
   achieved: number;
   maxScore: number;
   percent: number;
   status: 'success' | 'partial' | 'fail' | 'none' | 'no_habits' | 'before_habits' | 'future';
+  scoreLabel: DailyScoreLabel | null;
 }
 
 export type Theme = 'light' | 'dark';
@@ -75,6 +78,14 @@ export interface StreakInfo {
   consistencyStreak: number;
 }
 
+export interface HabitConsistency {
+  habitId: string;
+  title: string;
+  emoji: string;
+  completedCount: number;
+  dueCount: number;
+}
+
 export interface WeeklySummary {
   weekStart: string;
   weekEnd: string;
@@ -83,6 +94,8 @@ export interface WeeklySummary {
   missCount: number;
   totalDue: number;
   scorePercent: number;
+  perHabitConsistency: HabitConsistency[];
+  weeklyAverageScore: number;
 }
 
 export type DayState =

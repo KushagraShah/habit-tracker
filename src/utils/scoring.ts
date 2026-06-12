@@ -1,5 +1,5 @@
 import { eachDayOfInterval } from 'date-fns';
-import type { DayScore, Habit, HabitLog, HabitStatus, StreakInfo } from '../types';
+import type { DailyScoreLabel, DayScore, Habit, HabitConsistency, HabitLog, HabitStatus, StreakInfo } from '../types';
 import { formatDateOnly, getWeekEnd, getWeekStart, parseDateOnly, startOfLocalDay, todayLocal } from './date';
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
@@ -14,6 +14,7 @@ export interface WeeklyAggregate {
   partialCount: number;
   missedCount: number;
   remainingTarget: number;
+  perHabitConsistency: HabitConsistency[];
 }
 
 export interface MonthlyAggregate {
@@ -33,6 +34,7 @@ export interface DailyAggregate {
   points: number;
   dueUnits: number;
   scorePercent: number;
+  scoreLabel: DailyScoreLabel | null;
 }
 
 function statusPoints(status: HabitStatus): number {
@@ -51,6 +53,13 @@ function toLogMap(logs: HabitLog[]): LogMap {
 
 function getLog(logMap: LogMap, habitId: string, date: Date): HabitLog | undefined {
   return logMap.get(`${habitId}:${formatDateOnly(date)}`);
+}
+
+export function computeDailyScoreLabel(scorePercent: number): DailyScoreLabel {
+  if (scorePercent >= 80) return 'great';
+  if (scorePercent >= 60) return 'good';
+  if (scorePercent >= 30) return 'partial';
+  return 'reset';
 }
 
 export function isHabitPausedOnDate(habit: Habit, date: Date): boolean {
@@ -112,11 +121,11 @@ function getFlexibleWeeklyScore(
   const target = getFlexibleTarget(habit);
 
   if (!habit.is_active) {
-    return { points: 0, dueUnits: 0, scorePercent: 0, doneCount: 0, partialCount: 0, missedCount: 0, remainingTarget: 0 };
+    return { points: 0, dueUnits: 0, scorePercent: 0, doneCount: 0, partialCount: 0, missedCount: 0, remainingTarget: 0, perHabitConsistency: [] };
   }
 
   if (!isWeekInHabitRange(habit, weekStart, weekEnd)) {
-    return { points: 0, dueUnits: 0, scorePercent: 0, doneCount: 0, partialCount: 0, missedCount: 0, remainingTarget: 0 };
+    return { points: 0, dueUnits: 0, scorePercent: 0, doneCount: 0, partialCount: 0, missedCount: 0, remainingTarget: 0, perHabitConsistency: [] };
   }
 
   const weekLogs = logs.filter((l) => {
@@ -134,8 +143,16 @@ function getFlexibleWeeklyScore(
   const dueUnits = target;
   const scorePercent = dueUnits > 0 ? Math.round((points / dueUnits) * 100) : 0;
   const remainingTarget = Math.max(0, target - rawPoints);
+  const completedCount = doneCount + partialCount;
+  const perHabitConsistency: HabitConsistency[] = [{
+    habitId: habit.id,
+    title: habit.title,
+    emoji: habit.emoji || '📋',
+    completedCount,
+    dueCount: Math.min(completedCount + remainingTarget, target),
+  }];
 
-  return { points, dueUnits, scorePercent, doneCount, partialCount, missedCount, remainingTarget };
+  return { points, dueUnits, scorePercent, doneCount, partialCount, missedCount, remainingTarget, perHabitConsistency };
 }
 
 function getFlexibleWeeklyScoreForMonth(
@@ -181,6 +198,7 @@ export function getWeeklyAggregate(
   let partialCount = 0;
   let missedCount = 0;
   let remainingTarget = 0;
+  const perHabitConsistency: HabitConsistency[] = [];
 
   for (const habit of habits) {
     if (habit.scheduling_type === 'flexible_weekly') {
@@ -191,8 +209,12 @@ export function getWeeklyAggregate(
       partialCount += flex.partialCount;
       missedCount += flex.missedCount; // explicit misses only
       remainingTarget += flex.remainingTarget;
+      perHabitConsistency.push(...flex.perHabitConsistency);
       continue;
     }
+
+    let habitDoneCount = 0;
+    let habitDueCount = 0;
 
     for (const day of weekDays) {
       if (!isHabitActiveOnDate(habit, day)) continue;
@@ -204,11 +226,27 @@ export function getWeeklyAggregate(
       doneCount += score.done;
       partialCount += score.partial;
       missedCount += score.missed;
+      if (score.dueUnits > 0) {
+        habitDueCount++;
+        if (score.done > 0 || score.partial > 0) {
+          habitDoneCount++;
+        }
+      }
+    }
+
+    if (habitDueCount > 0) {
+      perHabitConsistency.push({
+        habitId: habit.id,
+        title: habit.title,
+        emoji: habit.emoji || '📋',
+        completedCount: habitDoneCount,
+        dueCount: habitDueCount,
+      });
     }
   }
 
   const scorePercent = dueUnits > 0 ? Math.round((points / dueUnits) * 100) : 0;
-  return { points, dueUnits, scorePercent, doneCount, partialCount, missedCount, remainingTarget };
+  return { points, dueUnits, scorePercent, doneCount, partialCount, missedCount, remainingTarget, perHabitConsistency };
 }
 
 export function getDailyAggregate(
@@ -222,11 +260,11 @@ export function getDailyAggregate(
   const todayStart = startOfLocalDay(today);
 
   if (current > todayStart) {
-    return { status: 'future', doneCount: 0, partialCount: 0, missedCount: 0, points: 0, dueUnits: 0, scorePercent: 0 };
+    return { status: 'future', doneCount: 0, partialCount: 0, missedCount: 0, points: 0, dueUnits: 0, scorePercent: 0, scoreLabel: null };
   }
 
   if (signupDate && current < startOfLocalDay(signupDate)) {
-    return { status: 'before_habits', doneCount: 0, partialCount: 0, missedCount: 0, points: 0, dueUnits: 0, scorePercent: 0 };
+    return { status: 'before_habits', doneCount: 0, partialCount: 0, missedCount: 0, points: 0, dueUnits: 0, scorePercent: 0, scoreLabel: null };
   }
 
   const logMap = toLogMap(logs);
@@ -262,12 +300,22 @@ export function getDailyAggregate(
   }
 
   if (dueUnits === 0) {
-    return { status: 'no_habits', doneCount: 0, partialCount: 0, missedCount: 0, points: 0, dueUnits: 0, scorePercent: 0 };
+    return { status: 'no_habits', doneCount: 0, partialCount: 0, missedCount: 0, points: 0, dueUnits: 0, scorePercent: 0, scoreLabel: null };
   }
 
-  let status: DailyAggregate['status'] = 'success';
-  if (missedCount > 0) status = 'fail';
-  else if (partialCount > 0) status = 'partial';
+  const scorePercent = Math.round((points / dueUnits) * 100);
+  
+  // Score-based status: no longer binary success/fail
+  // A day with any misses is not automatically a fail
+  // Instead we derive label from score percent
+  let status: DailyAggregate['status'];
+  if (scorePercent >= 80) {
+    status = 'success';
+  } else if (scorePercent >= 30) {
+    status = 'partial';
+  } else {
+    status = 'fail';
+  }
 
   return {
     status,
@@ -276,7 +324,8 @@ export function getDailyAggregate(
     missedCount,
     points,
     dueUnits,
-    scorePercent: Math.round((points / dueUnits) * 100),
+    scorePercent,
+    scoreLabel: computeDailyScoreLabel(scorePercent),
   };
 }
 
@@ -382,6 +431,7 @@ export function computeDayScore(
     maxScore: day.dueUnits,
     percent: day.scorePercent,
     status: day.status,
+    scoreLabel: day.scoreLabel,
   };
 }
 

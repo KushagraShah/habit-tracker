@@ -9,13 +9,13 @@ import {
   fetchAllLogs,
   fetchHabits,
   fetchLogs,
+  isHabitScheduledOnDate,
   updateHabit,
-  computeHabitStreaks,
   swapOrderIndex,
 } from '../lib/habits';
 import type { Habit, HabitCreateInput, PausePeriod, RecurrenceDay, SchedulingType } from '../types';
 import { DAYS_OF_WEEK, EMOJIS } from '../types';
-import { formatDateOnly, isAfterDateOnly, todayLocal } from '../utils/date';
+import { formatDateOnly, getWeekStart, getWeekEnd, isAfterDateOnly, todayLocal } from '../utils/date';
 
 const DEFAULT_HABIT_YEARS = 1;
 const splitter = new GraphemeSplitter();
@@ -92,6 +92,10 @@ export default function HabitsPage() {
   const [pauseUntilDate, setPauseUntilDate] = useState('');
 
   const [todayDate] = useState(() => todayLocal());
+  const currentWeekStart = getWeekStart(todayDate);
+  const currentWeekEnd = getWeekEnd(todayDate);
+  const currentWeekStartStr = formatDateOnly(currentWeekStart);
+  const currentWeekEndStr = formatDateOnly(currentWeekEnd);
   const todayStr = formatDateOnly(todayDate);
   const todayMinStr = todayStr;
 
@@ -652,9 +656,27 @@ export default function HabitsPage() {
       ) : (
         <div className="space-y-3">
           {habits.map((habit) => {
-            const streaks = computeHabitStreaks(habit, allLogs[habit.id] || []);
             const pauseLabel = getPauseLabel(habit);
             const isPaused = !habit.is_active || !!habit.pause_until;
+
+            // Compute weekly consistency from per-habit logs
+            const habitLogs = allLogs[habit.id] || [];
+            const weekHabitLogs = habitLogs.filter((l) => l.log_date >= currentWeekStartStr && l.log_date <= currentWeekEndStr);
+            const weekDoneCount = weekHabitLogs.filter((l) => l.status === 'success' || l.status === 'partial').length;
+            const weekDueCount = (() => {
+              if (habit.scheduling_type === 'flexible_weekly') {
+                return Math.min(weekHabitLogs.length + 1, habit.weekly_target ?? 1);
+              }
+              // Count due days in current week
+              let count = 0;
+              let d = new Date(currentWeekStart);
+              while (d <= currentWeekEnd) {
+                if (isHabitScheduledOnDate(habit, d)) count++;
+                d.setDate(d.getDate() + 1);
+              }
+              return count;
+            })();
+            const weekDueDisplay = Math.max(weekDueCount, weekDoneCount);
 
             return (
               <div key={habit.id} className={`bg-white dark:bg-gray-900 rounded-xl shadow-sm border p-4 ${isPaused ? 'border-gray-100 dark:border-gray-700 opacity-60' : 'border-gray-100 dark:border-gray-700'}`}>
@@ -669,8 +691,9 @@ export default function HabitsPage() {
                     <p className="text-xs text-gray-400">{habit.scheduling_type === 'fixed_weekdays' ? formatRecurrence(habit.recurrence) : `${habit.weekly_target}x / week`}</p>
                     <p className="text-xs text-gray-400">{habit.start_date} → {habit.end_date}</p>
                     <div className="flex gap-3 mt-1.5">
-                      <span className="text-xs text-green-600 dark:text-green-400 font-medium">🔥 Success {streaks.successStreak}</span>
-                      <span className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">💪 Consistency {streaks.consistencyStreak}</span>
+                      <span className="text-xs text-green-600 dark:text-green-400 font-medium">
+                        This week: {weekDoneCount}/{weekDueDisplay}
+                      </span>
                     </div>
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">

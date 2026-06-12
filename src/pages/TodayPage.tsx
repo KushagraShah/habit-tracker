@@ -10,7 +10,7 @@ import {
   upsertLog,
 } from '../lib/habits';
 import { computeDayScore, getWeeklyAggregate, getWeeklyTrendData } from '../utils/scoring';
-import type { Habit, HabitLog, HabitStatus } from '../types';
+import type { DailyScoreLabel, Habit, HabitLog, HabitStatus } from '../types';
 import {
   formatDateOnly,
   isBeforeDateOnly,
@@ -25,6 +25,33 @@ import {
 
 const DAYS_IN_BAR = 7;
 const TREND_WEEKS = 8;
+
+const SCORE_LABEL_CONFIG: Record<DailyScoreLabel, { emoji: string; label: string; color: string; bg: string }> = {
+  great: {
+    emoji: '🌟',
+    label: 'Great day',
+    color: 'text-green-600 dark:text-green-400',
+    bg: 'bg-green-500',
+  },
+  good: {
+    emoji: '👍',
+    label: 'Good day',
+    color: 'text-indigo-600 dark:text-indigo-400',
+    bg: 'bg-indigo-500',
+  },
+  partial: {
+    emoji: '📊',
+    label: 'Partial day',
+    color: 'text-yellow-600 dark:text-yellow-400',
+    bg: 'bg-yellow-500',
+  },
+  reset: {
+    emoji: '🔄',
+    label: 'Reset day',
+    color: 'text-red-600 dark:text-red-400',
+    bg: 'bg-red-500',
+  },
+};
 
 function mergeLogsById(...collections: HabitLog[][]): HabitLog[] {
   const map = new Map<string, HabitLog>();
@@ -155,6 +182,36 @@ export default function TodayPage() {
     return addDays(viewDate, offset);
   });
 
+  const scoreLabelConfig = dayScore.scoreLabel ? SCORE_LABEL_CONFIG[dayScore.scoreLabel] : null;
+
+  // Find weakest habits (lowest completion ratio)
+  const weakestHabits = [...weeklySummary.perHabitConsistency]
+    .sort((a, b) => {
+      const ratioA = a.dueCount > 0 ? a.completedCount / a.dueCount : 0;
+      const ratioB = b.dueCount > 0 ? b.completedCount / b.dueCount : 0;
+      return ratioA - ratioB;
+    })
+    .slice(0, 2)
+    .filter((h) => h.dueCount > 0 && h.completedCount < h.dueCount);
+
+  // Encouraging copy based on score
+  const encouragingCopy = (() => {
+    if (!dayScore.scoreLabel) return null;
+    const total = dayScore.total;
+    const completed = Math.round(dayScore.achieved);
+    const missed = total - completed;
+    if (dayScore.scoreLabel === 'great') {
+      return `Everything on track! You completed all ${completed} habits.`;
+    }
+    if (dayScore.scoreLabel === 'good') {
+      return `Still a good day. You completed ${completed} of ${total} habits.`;
+    }
+    if (dayScore.scoreLabel === 'partial') {
+      return `You completed ${completed} of ${total} habits. Some room for improvement tomorrow.`;
+    }
+    return `Tough day. ${missed} of ${total} habits missed — tomorrow is a fresh start.`;
+  })();
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-4">
       {/* Weekday bar */}
@@ -204,72 +261,35 @@ export default function TodayPage() {
         </div>
       )}
 
-      {/* Weekly Summary Card */}
-      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">This week</h3>
-          <span className="text-xs text-gray-400">{formatWeekRange(weekStart)}</span>
-        </div>
-        <div className="flex items-center gap-4">
-          <div className="flex-1">
-            <div className="text-sm text-gray-600 dark:text-gray-300">
-              <span className="text-green-600 dark:text-green-400 font-semibold">{weeklySummary.doneCount} done</span>
-              <span className="text-gray-400"> · </span>
-              <span className="text-yellow-600 dark:text-yellow-400 font-semibold">{weeklySummary.partialCount} partial</span>
-              <span className="text-gray-400"> · </span>
-              <span className="text-red-600 dark:text-red-400 font-semibold">{weeklySummary.missedCount} missed</span>
-            </div>
-            <div className="text-xs text-gray-400 mt-1">Progress: {weeklySummary.points.toFixed(1)} / {weeklySummary.dueUnits} due units</div>
-            {weeklySummary.remainingTarget > 0 && (
-              <div className="text-xs text-gray-400 mt-1">Remaining target: {weeklySummary.remainingTarget}</div>
-            )}
-          </div>
-          <div className="text-right">
-            <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-              {weeklySummary.scorePercent}%
-            </div>
-            <div className="text-xs text-gray-400">score</div>
-          </div>
-        </div>
-        {weeklySummary.dueUnits > 0 && (
-          <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mt-2">
-            <div
-              className="h-full rounded-full bg-indigo-500"
-              style={{ width: `${Math.min(weeklySummary.scorePercent, 100)}%` }}
-            />
-          </div>
-        )}
-      </div>
-
-      {/* Daily Score */}
+      {/* Daily Score Card */}
       {['success', 'partial', 'fail'].includes(dayScore.status) && (
-        <div className="mb-4">
-          <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span
-              className={`font-medium ${
-                dayScore.status === 'success'
-                  ? 'text-green-600 dark:text-green-400'
-                  : dayScore.status === 'partial'
-                    ? 'text-yellow-600 dark:text-yellow-400'
-                    : 'text-red-600 dark:text-red-400'
-              }`}
-            >
-              {dayScore.status === 'success' ? '✅ All done' : dayScore.status === 'partial' ? '🟡 Partial' : '❌ Missed'}
-            </span>
-            <span>{Math.round(dayScore.percent)}%</span>
+        <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100">
+                {scoreLabelConfig?.emoji} Today: {Math.round(dayScore.achieved)}/{dayScore.total}
+              </h3>
+              {scoreLabelConfig && (
+                <p className={`text-sm font-medium ${scoreLabelConfig.color}`}>
+                  {dayScore.percent}% · {scoreLabelConfig.label}
+                </p>
+              )}
+            </div>
+            <div className="text-right">
+              <div className={`text-3xl font-bold ${scoreLabelConfig?.color ?? 'text-gray-400'}`}>
+                {dayScore.percent}%
+              </div>
+            </div>
           </div>
           <div className="w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full ${
-                dayScore.status === 'success'
-                  ? 'bg-green-500'
-                  : dayScore.status === 'partial'
-                    ? 'bg-yellow-500'
-                    : 'bg-red-500'
-              }`}
+              className={`h-full rounded-full transition-all ${scoreLabelConfig?.bg ?? 'bg-gray-400'}`}
               style={{ width: `${Math.min(dayScore.percent, 100)}%` }}
             />
           </div>
+          {encouragingCopy && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">{encouragingCopy}</p>
+          )}
         </div>
       )}
 
@@ -292,9 +312,79 @@ export default function TodayPage() {
 
       {isPast && showPastWarning && (
         <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-lg px-4 py-2 mb-4 text-sm text-amber-700 dark:text-amber-300">
-          ⚠️ You are editing data for a past date. This will affect your streaks and statistics.
+          ⚠️ You are editing data for a past date. This will affect your statistics.
         </div>
       )}
+
+      {/* Weekly Summary Card */}
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">This week</h3>
+          <span className="text-xs text-gray-400">{formatWeekRange(weekStart)}</span>
+        </div>
+        <div className="flex items-center gap-4 mb-3">
+          <div className="flex-1">
+            <div className="text-sm text-gray-600 dark:text-gray-300">
+              <span className="text-green-600 dark:text-green-400 font-semibold">{weeklySummary.doneCount} done</span>
+              <span className="text-gray-400"> · </span>
+              <span className="text-yellow-600 dark:text-yellow-400 font-semibold">{weeklySummary.partialCount} partial</span>
+              <span className="text-gray-400"> · </span>
+              <span className="text-red-600 dark:text-red-400 font-semibold">{weeklySummary.missedCount} missed</span>
+            </div>
+            <div className="text-xs text-gray-400 mt-1">Progress: {weeklySummary.points.toFixed(1)} / {weeklySummary.dueUnits} due units</div>
+            {weeklySummary.remainingTarget > 0 && (
+              <div className="text-xs text-gray-400 mt-1">Remaining target: {weeklySummary.remainingTarget}</div>
+            )}
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+              {weeklySummary.scorePercent}%
+            </div>
+            <div className="text-xs text-gray-400">weekly avg</div>
+          </div>
+        </div>
+        {weeklySummary.dueUnits > 0 && (
+          <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-3">
+            <div
+              className="h-full rounded-full bg-indigo-500"
+              style={{ width: `${Math.min(weeklySummary.scorePercent, 100)}%` }}
+            />
+          </div>
+        )}
+
+        {/* Per-habit consistency */}
+        {weeklySummary.perHabitConsistency.length > 0 && (
+          <div>
+            <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Per-habit completion</h4>
+            <div className="space-y-1.5">
+              {weeklySummary.perHabitConsistency.map((pc) => {
+                const isComplete = pc.dueCount > 0 && pc.completedCount >= pc.dueCount;
+                return (
+                  <div key={pc.habitId} className="flex items-center gap-2 text-xs">
+                    <span className="text-sm w-5 text-center">{pc.emoji}</span>
+                    <span className="flex-1 text-gray-700 dark:text-gray-300 truncate">{pc.title}</span>
+                    <span className={`font-medium ${isComplete ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                      {pc.completedCount}/{pc.dueCount}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Weakest habits */}
+        {weakestHabits.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+            <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Focus areas</h4>
+            {weakestHabits.map((h) => (
+              <p key={h.habitId} className="text-xs text-amber-600 dark:text-amber-400">
+                {h.emoji} {h.title}: {h.completedCount}/{h.dueCount}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Trend Chart */}
       <button
