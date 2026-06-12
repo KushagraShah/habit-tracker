@@ -669,7 +669,7 @@ export default function HabitsPage() {
               }
               // Count due days in current week
               let count = 0;
-              let d = new Date(currentWeekStart);
+              const d = new Date(currentWeekStart);
               while (d <= currentWeekEnd) {
                 if (isHabitScheduledOnDate(habit, d)) count++;
                 d.setDate(d.getDate() + 1);
