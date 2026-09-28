@@ -1,8 +1,10 @@
 -- Habit Tracker Database Schema
 -- Run this in Supabase SQL editor after creating a new project.
--- If you already have the old schema, review before re-running because CREATE TABLE
--- statements are intended for fresh projects. The ALTER/POLICY sections document the
--- expected final shape for existing projects.
+--
+-- Fresh project: run this file, then run the move_habit RPC + checks from
+--   supabase-migration-order-rpc-and-skip.sql (STEP 2 onward).
+-- Existing project: run supabase-migration-order-rpc-and-skip.sql instead -
+--   it snapshots your tables first.
 
 -- 1. Profiles table (extends auth.users)
 CREATE TABLE profiles (
@@ -76,7 +78,10 @@ CREATE TABLE habits (
   end_date DATE NOT NULL DEFAULT (CURRENT_DATE + INTERVAL '10 years'),
   pause_periods JSONB NOT NULL DEFAULT '[]' CHECK (jsonb_typeof(pause_periods) = 'array'),
   pause_until DATE DEFAULT NULL,
+  -- Deprecated: kept only so older clients keep working. Ordering uses order_index.
   sort_order INT DEFAULT 0,
+  order_index INT NOT NULL DEFAULT 0,
+  eligible_weekdays INTEGER[] DEFAULT NULL,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
@@ -84,7 +89,13 @@ CREATE TABLE habits (
 );
 
 CREATE INDEX idx_habits_user_id ON habits(user_id);
-CREATE INDEX idx_habits_user_sort ON habits(user_id, sort_order, created_at);
+CREATE INDEX idx_habits_user_sort ON habits(user_id, order_index, created_at);
+
+-- One habit per position per user. DEFERRABLE so a single-statement renumber
+-- (used by the move_habit RPC) can never trip on a transient duplicate.
+ALTER TABLE habits
+  ADD CONSTRAINT habits_user_order_index_key
+  UNIQUE (user_id, order_index) DEFERRABLE INITIALLY DEFERRED;
 
 CREATE TRIGGER set_habits_updated_at
   BEFORE UPDATE ON habits
@@ -116,7 +127,7 @@ CREATE TABLE habit_logs (
   habit_id UUID NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   log_date DATE NOT NULL,
-  status TEXT NOT NULL CHECK (status IN ('success', 'partial', 'fail')),
+  status TEXT NOT NULL CHECK (status IN ('success', 'partial', 'fail', 'skipped')),
   note TEXT,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),

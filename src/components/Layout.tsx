@@ -4,7 +4,7 @@ import { useTheme } from '../contexts/useTheme';
 
 const navItems = [
   { to: '/today', label: 'Today', icon: '📝' },
-  { to: '/calendar', label: 'Calendar', icon: '📅' },
+  { to: '/insights', label: 'Insights', icon: '📊' },
   { to: '/habits', label: 'Habits', icon: '⚙️' },
 ];
 
@@ -59,8 +59,8 @@ export default function Layout() {
                 }`
               }
             >
-              <span className={`text-lg mb-0.5`}>{item.icon}</span>
-              <span className={`font-semibold`}>{item.label}</span>
+              <span className="text-lg mb-0.5">{item.icon}</span>
+              <span className="font-semibold">{item.label}</span>
             </NavLink>
           ))}
         </div>

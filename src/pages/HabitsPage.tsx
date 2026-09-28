@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { addYears } from 'date-fns';
+import { addYears, subDays } from 'date-fns';
 import GraphemeSplitter from 'grapheme-splitter';
 import emojiRegex from 'emoji-regex';
 import { useAuth } from '../contexts/useAuth';
@@ -9,16 +9,33 @@ import {
   fetchAllLogs,
   fetchHabits,
   fetchLogs,
-  isHabitScheduledOnDate,
+  moveHabit,
   updateHabit,
-  swapOrderIndex,
 } from '../lib/habits';
-import type { Habit, HabitCreateInput, PausePeriod, RecurrenceDay, SchedulingType } from '../types';
-import { DAYS_OF_WEEK, EMOJIS } from '../types';
+import type {
+  Habit,
+  HabitCreateInput,
+  HabitDayState,
+  HabitLog,
+  PausePeriod,
+  RecurrenceDay,
+  SchedulingType,
+} from '../types';
+import { DAYS_OF_WEEK, EMOJIS, WEEKDAY_LABELS } from '../types';
 import { formatDateOnly, getWeekStart, getWeekEnd, isAfterDateOnly, todayLocal } from '../utils/date';
+import { getHabitStats, isHabitEnded, isHabitPausedOnDate, isHabitScheduledOnDate } from '../utils/scoring';
 
 const DEFAULT_HABIT_YEARS = 1;
 const splitter = new GraphemeSplitter();
+
+const STRIP_COLORS: Record<HabitDayState, string> = {
+  success: 'bg-green-500',
+  partial: 'bg-amber-400',
+  fail: 'bg-red-500',
+  skipped: 'bg-slate-400',
+  not_logged: 'bg-gray-200 dark:bg-gray-700',
+  not_due: 'bg-gray-100 dark:bg-gray-800',
+};
 
 function getDefaultEndDate(): string {
   return formatDateOnly(addYears(todayLocal(), DEFAULT_HABIT_YEARS));
@@ -46,20 +63,27 @@ function closeOpenPausePeriod(periods: PausePeriod[], date: string): PausePeriod
   ));
 }
 
-function getPauseLabel(habit: Habit): string {
-  if (!habit.is_active) {
-    const openPeriod = (habit.pause_periods ?? []).find(p => !p.end);
-    if (openPeriod) return 'Paused indefinitely';
-    if (habit.pause_until) return `Paused until ${habit.pause_until}`;
-    return 'Paused';
-  }
-  return '';
+/**
+ * Pause label derived from the actual schedule, not the is_active flag: a
+ * timed pause auto-resumes, so is_active alone would keep lying about it.
+ */
+function getPauseLabel(habit: Habit, today: Date): string {
+  const paused = isHabitPausedOnDate(habit, today) || !habit.is_active;
+  if (!paused) return '';
+
+  const openPeriod = (habit.pause_periods ?? []).find((period) => !period.end);
+  if (openPeriod && !habit.is_active) return 'Paused indefinitely';
+
+  const lastEnded = [...(habit.pause_periods ?? [])].reverse().find((period) => period.end);
+  if (lastEnded?.end) return `Paused until ${lastEnded.end}`;
+  if (habit.pause_until) return `Paused until ${habit.pause_until}`;
+  return 'Paused';
 }
 
 export default function HabitsPage() {
   const { user } = useAuth();
   const [habits, setHabits] = useState<Habit[]>([]);
-  const [allLogs, setAllLogs] = useState<Record<string, import('../types').HabitLog[]>>({});
+  const [allLogs, setAllLogs] = useState<Record<string, HabitLog[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [exportError, setExportError] = useState('');
@@ -85,7 +109,6 @@ export default function HabitsPage() {
   const [schedulingType, setSchedulingType] = useState<SchedulingType>('fixed_weekdays');
   const [weeklyTarget, setWeeklyTarget] = useState(4);
   const [eligibleWeekdays, setEligibleWeekdays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]); // 0=Sun...6=Sat
-  const weekdayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const [deleteTarget, setDeleteTarget] = useState<Habit | null>(null);
   const [pauseTarget, setPauseTarget] = useState<Habit | null>(null);
   const [pauseAction, setPauseAction] = useState<'indefinite' | 'until' | 'resume' | null>(null);
@@ -94,8 +117,6 @@ export default function HabitsPage() {
   const [todayDate] = useState(() => todayLocal());
   const currentWeekStart = getWeekStart(todayDate);
   const currentWeekEnd = getWeekEnd(todayDate);
-  const currentWeekStartStr = formatDateOnly(currentWeekStart);
-  const currentWeekEndStr = formatDateOnly(currentWeekEnd);
   const todayStr = formatDateOnly(todayDate);
   const todayMinStr = todayStr;
 
@@ -110,7 +131,7 @@ export default function HabitsPage() {
 
       const endStr = formatDateOnly(today);
       const start = new Date(today);
-      start.setDate(start.getDate() - 90);
+      start.setDate(start.getDate() - 399);
       const startStr = formatDateOnly(start);
 
       const logsData = await fetchLogs(user.id, startStr, endStr);
@@ -225,6 +246,18 @@ export default function HabitsPage() {
       setFormError('Select at least one recurrence day.');
       return false;
     }
+    if (schedulingType === 'flexible_weekly') {
+      if (eligibleWeekdays.length === 0) {
+        setFormError('Pick at least one weekday this habit can be done on.');
+        return false;
+      }
+      if (weeklyTarget > eligibleWeekdays.length) {
+        setFormError(
+          `Target is ${weeklyTarget}x per week but only ${eligibleWeekdays.length} weekday(s) are eligible.`
+        );
+        return false;
+      }
+    }
     if (isAfterDateOnly(new Date(`${startDate}T00:00:00`), new Date(`${endDate}T00:00:00`))) {
       setFormError('End date must be on or after start date.');
       return false;
@@ -249,8 +282,9 @@ export default function HabitsPage() {
       fail_label: failLabel.trim() || null,
       start_date: startDate,
       end_date: endDate,
-      sort_order: editingHabit?.sort_order ?? habits.length,
-      order_index: editingHabit?.order_index ?? habits.length,
+      order_index:
+        editingHabit?.order_index ??
+        habits.reduce((max, item) => Math.max(max, item.order_index ?? 0), -1) + 1,
       eligible_weekdays: schedulingType === 'flexible_weekly' ? eligibleWeekdays : null,
       is_active: editingHabit?.is_active ?? true,
       pause_periods: editingHabit?.pause_periods ?? [],
@@ -321,7 +355,9 @@ export default function HabitsPage() {
       } else if (pauseAction === 'until' && pauseUntilDate) {
         const closedPeriods = closeOpenPausePeriod(pausePeriods, todayStr);
         await updateHabit(pauseTarget.id, {
-          is_active: false,
+          // A timed pause keeps the habit active: it auto-resumes when the end
+          // date passes, instead of staying dead until a manual resume.
+          is_active: true,
           pause_periods: [...closedPeriods, { start: todayStr, end: pauseUntilDate }],
           pause_until: pauseUntilDate,
         });
@@ -335,6 +371,29 @@ export default function HabitsPage() {
     }
   };
 
+  // Escape closes any open modal, and a modal stops the page scrolling behind it.
+  const anyModalOpen = showForm || !!deleteTarget || !!pauseTarget;
+  useEffect(() => {
+    if (!anyModalOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setShowForm(false);
+      setEditingHabit(null);
+      setFormError('');
+      setDeleteTarget(null);
+      setPauseTarget(null);
+      setPauseAction(null);
+      setPauseUntilDate('');
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [anyModalOpen]);
+
   const formatRecurrence = (days: RecurrenceDay[]) => {
     if (days.length === 7) return 'Every day';
     if (days.length === 5 && !days.includes('Sat') && !days.includes('Sun')) return 'Weekdays';
@@ -342,29 +401,32 @@ export default function HabitsPage() {
     return DAYS_OF_WEEK.filter((day) => days.includes(day)).join(', ');
   };
 
-  const submitDisabled = (schedulingType === 'fixed_weekdays' && selectedDays.length === 0) || !title.trim();
+  const submitDisabled =
+    !title.trim() ||
+    (schedulingType === 'fixed_weekdays'
+      ? selectedDays.length === 0
+      : eligibleWeekdays.length === 0 || weeklyTarget > eligibleWeekdays.length);
 
-  const handleMoveUp = async (habit: Habit, index: number) => {
-    if (!user || index === 0) return;
-    const above = habits[index - 1];
+  const handleMove = async (habit: Habit, direction: -1 | 1) => {
+    if (!user) return;
     try {
-      // Swap actual order_index values between the two habits
-      await swapOrderIndex(user.id, habit.id, habit.order_index, above.id, above.order_index);
+      setError('');
+      await moveHabit(user.id, habit.id, direction);
       await loadHabits();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reorder');
     }
   };
 
-  const handleMoveDown = async (habit: Habit, index: number) => {
-    if (!user || index === habits.length - 1) return;
-    const below = habits[index + 1];
+  const handleExtend = async (habit: Habit) => {
     try {
-      // Swap actual order_index values between the two habits
-      await swapOrderIndex(user.id, habit.id, habit.order_index, below.id, below.order_index);
+      setError('');
+      await updateHabit(habit.id, {
+        end_date: formatDateOnly(addYears(todayDate, DEFAULT_HABIT_YEARS)),
+      });
       await loadHabits();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to reorder');
+      setError(err instanceof Error ? err.message : 'Failed to extend habit');
     }
   };
 
@@ -404,6 +466,12 @@ export default function HabitsPage() {
     }
   };
 
+  const scheduledToday = habits.filter((habit) => isHabitScheduledOnDate(habit, todayDate));
+  const recentLogCount = Object.values(allLogs)
+    .flat()
+    .filter((log) => log.log_date >= formatDateOnly(subDays(todayDate, 13))).length;
+  const avgLoggedPerDay = recentLogCount / 14;
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
@@ -437,8 +505,26 @@ export default function HabitsPage() {
         </div>
       )}
 
+      {/* Habit-load audit: unwinnable targets are the real reason scores feel bad */}
+      {!loading && scheduledToday.length > 0 && (
+        <div className="mb-4 rounded-xl border border-indigo-100 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 px-3 py-2.5">
+          <p className="text-xs text-indigo-800 dark:text-indigo-300">
+            <span className="font-semibold">{scheduledToday.length} due today</span> · {habits.length} habits
+            total · averaged {avgLoggedPerDay.toFixed(1)} logs/day over the last two weeks.
+            {scheduledToday.length > 6
+              ? ' That is a heavy daily load — consider making a habit or two 3x per week.'
+              : ''}
+          </p>
+        </div>
+      )}
+
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={editingHabit ? 'Edit habit' : 'New habit'}
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        >
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">
               {editingHabit ? 'Edit Habit' : 'New Habit'}
@@ -563,7 +649,7 @@ export default function HabitsPage() {
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Can be done on</label>
                     <p className="text-xs text-gray-400 mb-2">Only show this habit on selected weekdays.</p>
                     <div className="flex gap-1 flex-wrap">
-                      {weekdayLabels.map((label, i) => (
+                      {WEEKDAY_LABELS.map((label, i) => (
                         <button key={label} type="button" onClick={() => {
                           setEligibleWeekdays((prev) =>
                             prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i].sort()
@@ -596,7 +682,12 @@ export default function HabitsPage() {
       )}
 
       {deleteTarget && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Delete habit"
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        >
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6">
             <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2">Delete habit?</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">This will delete the habit and all of its past logs. This cannot be undone.</p>
@@ -609,12 +700,17 @@ export default function HabitsPage() {
       )}
 
       {pauseTarget && !pauseAction && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Pause or resume habit"
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        >
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6">
             <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2">{pauseTarget.title}</h3>
             <p className="text-xs text-gray-400 mb-4">Manage pause options</p>
             <div className="space-y-2">
-              {pauseTarget.is_active ? (
+              {pauseTarget.is_active && !isHabitPausedOnDate(pauseTarget, todayDate) ? (
                 <>
                   <button onClick={() => setPauseAction('indefinite')} className="w-full px-4 py-3 rounded-lg text-left text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-100 dark:border-gray-700">⏸ Pause indefinitely</button>
                   <button onClick={() => setPauseAction('until')} className="w-full px-4 py-3 rounded-lg text-left text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors border border-gray-100 dark:border-gray-700">📅 Pause until date</button>
@@ -633,7 +729,12 @@ export default function HabitsPage() {
       )}
 
       {pauseTarget && pauseAction === 'until' && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Pause until date"
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+        >
           <div className="bg-white dark:bg-gray-900 rounded-2xl w-full max-w-sm p-6">
             <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-2">Pause until date</h3>
             <p className="text-xs text-gray-400 mb-4">The habit will automatically resume after this date.</p>
@@ -655,55 +756,121 @@ export default function HabitsPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {habits.map((habit) => {
-            const pauseLabel = getPauseLabel(habit);
-            const isPaused = !habit.is_active || !!habit.pause_until;
-
-            // Compute weekly consistency from per-habit logs
-            const habitLogs = allLogs[habit.id] || [];
-            const weekHabitLogs = habitLogs.filter((l) => l.log_date >= currentWeekStartStr && l.log_date <= currentWeekEndStr);
-            const weekDoneCount = weekHabitLogs.filter((l) => l.status === 'success' || l.status === 'partial').length;
-            const weekDueCount = (() => {
-              if (habit.scheduling_type === 'flexible_weekly') {
-                return Math.min(weekHabitLogs.length + 1, habit.weekly_target ?? 1);
-              }
-              // Count due days in current week
-              let count = 0;
-              const d = new Date(currentWeekStart);
-              while (d <= currentWeekEnd) {
-                if (isHabitScheduledOnDate(habit, d)) count++;
-                d.setDate(d.getDate() + 1);
-              }
-              return count;
-            })();
-            const weekDueDisplay = Math.max(weekDueCount, weekDoneCount);
+          {habits.map((habit, index) => {
+            const habitLogs = allLogs[habit.id] ?? [];
+            const pauseLabel = getPauseLabel(habit, todayDate);
+            const ended = isHabitEnded(habit, todayDate);
+            const paused = isHabitPausedOnDate(habit, todayDate) || !habit.is_active;
+            // One shared engine feeds the weekly number, the strip and the streak.
+            const weekStats = getHabitStats(
+              habit,
+              habitLogs,
+              currentWeekStart,
+              currentWeekEnd,
+              todayDate
+            );
+            const monthStats = getHabitStats(habit, habitLogs, subDays(todayDate, 29), todayDate, todayDate);
 
             return (
-              <div key={habit.id} className={`bg-white dark:bg-gray-900 rounded-xl shadow-sm border p-4 ${isPaused ? 'border-gray-100 dark:border-gray-700 opacity-60' : 'border-gray-100 dark:border-gray-700'}`}>
+              <div key={habit.id} className={`bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 ${paused || ended ? 'opacity-70' : ''}`}>
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">{habit.emoji || '📋'}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-gray-800 dark:text-gray-100 truncate">{habit.title}</h3>
                       {pauseLabel && <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-300">{pauseLabel}</span>}
-                      {!isPaused && habit.is_active && <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">Active</span>}
+                      {ended && <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300">Ended</span>}
+                      {!paused && !ended && <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300">Active</span>}
                     </div>
-                    <p className="text-xs text-gray-400">{habit.scheduling_type === 'fixed_weekdays' ? formatRecurrence(habit.recurrence) : `${habit.weekly_target}x / week`}</p>
-                    <p className="text-xs text-gray-400">{habit.start_date} → {habit.end_date}</p>
-                    <div className="flex gap-3 mt-1.5">
-                      <span className="text-xs text-green-600 dark:text-green-400 font-medium">
-                        This week: {weekDoneCount}/{weekDueDisplay}
+                    <p className="text-xs text-gray-400">
+                      {habit.scheduling_type === 'fixed_weekdays'
+                        ? formatRecurrence(habit.recurrence)
+                        : `${habit.weekly_target}x / week${
+                            habit.eligible_weekdays && habit.eligible_weekdays.length < 7
+                              ? ` · ${habit.eligible_weekdays
+                                  .map((day) => WEEKDAY_LABELS[day])
+                                  .join(', ')}`
+                              : ''
+                          }`}
+                    </p>
+                    <div className="flex items-center gap-2 flex-wrap mt-1.5">
+                      <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                        This week {weekStats.logged}/{weekStats.due}
+                      </span>
+                      {monthStats.successStreak > 1 && (
+                        <span className="text-xs text-orange-500 font-medium">
+                          🔥 {monthStats.successStreak}
+                        </span>
+                      )}
+                      <span className="flex gap-0.5" title="Last 7 days">
+                        {monthStats.last7.map((entry) => (
+                          <span
+                            key={entry.date}
+                            className={`w-1.5 h-3 rounded-sm ${STRIP_COLORS[entry.state]}`}
+                            title={entry.date}
+                          />
+                        ))}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {ended
+                          ? `Ended ${habit.end_date}`
+                          : `Started ${habit.start_date}`}
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    <div className="flex flex-col gap-0.5 mr-1">
-                      <button onClick={() => handleMoveUp(habit, habits.indexOf(habit))} disabled={habits.indexOf(habit) === 0} className="text-[10px] px-1 py-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-20 disabled:cursor-not-allowed" title="Move up">▲</button>
-                      <button onClick={() => handleMoveDown(habit, habits.indexOf(habit))} disabled={habits.indexOf(habit) === habits.length - 1} className="text-[10px] px-1 py-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-20 disabled:cursor-not-allowed" title="Move down">▼</button>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    {ended && (
+                      <button
+                        onClick={() => handleExtend(habit)}
+                        className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-700 rounded-lg px-2 py-1"
+                        title="Set the end date one year from today"
+                      >
+                        Extend
+                      </button>
+                    )}
+                    <div className="flex items-center gap-0.5">
+                      <div className="flex flex-col">
+                        <button
+                          onClick={() => handleMove(habit, -1)}
+                          disabled={index === 0}
+                          className="w-9 h-8 rounded-md text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-20 disabled:cursor-not-allowed"
+                          title="Move up"
+                          aria-label={`Move ${habit.title} up`}
+                        >
+                          ▲
+                        </button>
+                        <button
+                          onClick={() => handleMove(habit, 1)}
+                          disabled={index === habits.length - 1}
+                          className="w-9 h-8 rounded-md text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-20 disabled:cursor-not-allowed"
+                          title="Move down"
+                          aria-label={`Move ${habit.title} down`}
+                        >
+                          ▼
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => openPauseMenu(habit)}
+                        className="w-10 h-10 rounded-lg text-sm bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors"
+                        title="Pause or resume"
+                      >
+                        ⏸
+                      </button>
+                      <button
+                        onClick={() => openEdit(habit)}
+                        className="w-10 h-10 rounded-lg text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        title="Edit"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => openDelete(habit)}
+                        className="w-10 h-10 rounded-lg text-sm text-gray-400 hover:text-red-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+                        title="Delete"
+                      >
+                        🗑️
+                      </button>
                     </div>
-                    <button onClick={() => openPauseMenu(habit)} className="px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 transition-colors" title="Pause options">⏸</button>
-                    <button onClick={() => openEdit(habit)} className="p-2 text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" title="Edit">✏️</button>
-                    <button onClick={() => openDelete(habit)} className="p-2 text-sm text-gray-400 hover:text-red-500" title="Delete">🗑️</button>
                   </div>
                 </div>
               </div>

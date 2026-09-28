@@ -7,6 +7,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: github-pages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -32,8 +36,18 @@ jobs:
       - name: Add SPA fallback for GitHub Pages
         run: cp ./dist/index.html ./dist/404.html
 
+      - name: Verify Pages artifact
+        run: |
+          test -f ./dist/index.html
+          test -f ./dist/404.html
+          test -f ./dist/manifest.webmanifest
+          test -f ./dist/sw.js
+          test -f ./dist/icons/icon-192.png
+          test -f ./dist/icons/icon-512.png
+          grep -q '/habit-tracker/assets/' ./dist/index.html
+
       - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
