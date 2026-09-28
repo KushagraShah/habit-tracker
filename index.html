@@ -3,10 +3,32 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/habit-tracker/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>habit-tracker</title>
-    <script type="module" crossorigin src="/habit-tracker/assets/index-Xp9i6ar1.js"></script>
-    <link rel="stylesheet" crossorigin href="/habit-tracker/assets/index-BFLBrpuI.css">
+    <link rel="manifest" href="/habit-tracker/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/habit-tracker/icons/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f9fafb" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#030712" media="(prefers-color-scheme: dark)" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Habits" />
+    <title>Habit Tracker</title>
+    <script>
+      // Apply the saved theme before first paint so dark mode does not flash light.
+      (function () {
+        try {
+          var saved = localStorage.getItem('habit-tracker-theme');
+          var dark = saved
+            ? saved === 'dark'
+            : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {
+          /* ignore */
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/habit-tracker/assets/index-B_NChRGL.js"></script>
+    <link rel="stylesheet" crossorigin href="/habit-tracker/assets/index-BLlbXV5w.css">
   </head>
   <body>
     <div id="root"></div>
