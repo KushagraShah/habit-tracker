@@ -22,7 +22,7 @@ import {
   getWeeklyTrendData,
   isHabitActiveOnDate,
 } from '../utils/scoring';
-import type { DayStatus, Habit, HabitDayState, HabitLog } from '../types';
+import type { DaySummary, Habit, HabitDayState, HabitLog } from '../types';
 import {
   formatDateOnly,
   formatWeekRange,
@@ -35,50 +35,60 @@ import {
 const WEEK_STARTS_ON = 1;
 const TREND_WEEKS = 8;
 
-const STATUS_STYLES: Record<DayStatus, { cell: string; text: string; label: string; dot: string }> = {
-  complete: {
+const PERFORMANCE_DAY_STYLES = {
+  good: {
     cell: 'bg-green-100 dark:bg-green-900/30 border-green-200 dark:border-green-800',
     text: 'text-green-700 dark:text-green-300',
-    label: 'Everything logged',
+    label: 'Strong performance',
     dot: 'bg-green-500',
   },
-  partial: {
+  mixed: {
     cell: 'bg-amber-100 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800',
     text: 'text-amber-700 dark:text-amber-300',
-    label: 'Partly logged',
+    label: 'Mixed performance',
     dot: 'bg-amber-500',
   },
-  unlogged: {
-    cell: 'bg-gray-50 dark:bg-gray-900/60 border-dashed border-gray-300 dark:border-gray-600',
-    text: 'text-gray-400 dark:text-gray-500',
-    label: 'Nothing logged',
-    dot: 'bg-gray-300 dark:bg-gray-600',
+  poor: {
+    cell: 'bg-red-100 dark:bg-red-900/30 border-red-200 dark:border-red-800',
+    text: 'text-red-700 dark:text-red-300',
+    label: 'Needs attention',
+    dot: 'bg-red-500',
   },
   skipped: {
-    cell: 'bg-rose-100 dark:bg-rose-900/30 border-rose-200 dark:border-rose-800',
-    text: 'text-rose-700 dark:text-rose-300',
-    label: 'Skipped',
-    dot: 'bg-rose-500',
+    cell: 'bg-slate-100 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700',
+    text: 'text-slate-500 dark:text-slate-400',
+    label: 'Only skipped outcomes',
+    dot: 'bg-slate-400',
   },
-  no_habits: {
-    cell: 'bg-gray-100 dark:bg-gray-800/60 border-gray-100 dark:border-gray-800',
+  unscored: {
+    cell: 'bg-gray-50 dark:bg-gray-900/60 border-dashed border-gray-300 dark:border-gray-600',
     text: 'text-gray-400 dark:text-gray-500',
-    label: 'Rest day',
+    label: 'No scored outcomes',
     dot: 'bg-gray-300 dark:bg-gray-600',
   },
-  before_habits: {
+  inactive: {
     cell: 'bg-gray-100 dark:bg-gray-800/60 border-gray-100 dark:border-gray-800',
     text: 'text-gray-400 dark:text-gray-500',
-    label: 'Before you started',
-    dot: 'bg-gray-300 dark:bg-gray-600',
-  },
-  future: {
-    cell: 'bg-gray-100 dark:bg-gray-800/60 border-gray-100 dark:border-gray-800',
-    text: 'text-gray-400 dark:text-gray-500',
-    label: 'Future',
+    label: 'Rest / unavailable',
     dot: 'bg-gray-300 dark:bg-gray-600',
   },
 };
+
+function getPerformanceDayStyle(summary: DaySummary) {
+  if (summary.status === 'future' || summary.status === 'before_habits' || summary.status === 'no_habits') {
+    return PERFORMANCE_DAY_STYLES.inactive;
+  }
+
+  const scored = summary.done + summary.partial + summary.failed;
+  if (scored > 0) {
+    if (summary.qualityPercent >= 80) return PERFORMANCE_DAY_STYLES.good;
+    if (summary.qualityPercent >= 50) return PERFORMANCE_DAY_STYLES.mixed;
+    return PERFORMANCE_DAY_STYLES.poor;
+  }
+
+  if (summary.skipped > 0 && summary.notLogged === 0) return PERFORMANCE_DAY_STYLES.skipped;
+  return PERFORMANCE_DAY_STYLES.unscored;
+}
 
 const DOT_COLORS: Record<HabitDayState, string> = {
   success: 'bg-green-500',
@@ -328,7 +338,7 @@ export default function InsightsPage() {
             {visibleDays.map((day) => {
               const dateKey = formatDateOnly(day);
               const summary = describeDay(habits, logs, day, today, signupDate);
-              const styles = STATUS_STYLES[summary.status];
+              const styles = getPerformanceDayStyle(summary);
               const dots = getHabitDots(day);
               const isCurrentMonth = isSameMonth(day, currentMonth);
               const isToday = dateKey === formatDateOnly(today);
@@ -341,7 +351,7 @@ export default function InsightsPage() {
                   onClick={() => navigate(`/today/${dateKey}`)}
                   title={`${format(day, 'PPP')} — ${styles.label}${
                     summary.due > 0
-                      ? ` (${summary.headline}${summary.detail ? ` · ${summary.detail}` : ''})`
+                      ? ` (${summary.done + summary.partial + summary.failed > 0 ? `${summary.qualityPercent}% performance · ` : ''}${loggedHere}/${summary.due} logged${summary.detail ? ` · ${summary.detail}` : ''})`
                       : ''
                   }`}
                   className={`min-h-[54px] rounded-xl border px-1 py-1.5 flex flex-col items-center justify-center transition-all hover:ring-2 hover:ring-indigo-300 ${
@@ -352,7 +362,7 @@ export default function InsightsPage() {
                 >
                   <span className={`text-xs font-semibold ${styles.text}`}>{format(day, 'd')}</span>
                   {showFraction && (
-                    <span className={`text-[10px] leading-tight opacity-80 ${styles.text}`}>
+                    <span className="text-[10px] leading-tight text-gray-400 dark:text-gray-500">
                       {loggedHere}/{summary.due}
                     </span>
                   )}
@@ -377,23 +387,23 @@ export default function InsightsPage() {
           <div className="mt-5 rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 p-4">
             <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-gray-500 dark:text-gray-400 justify-center">
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded bg-green-100 border border-green-200" /> Everything logged
+                <span className="w-3 h-3 rounded bg-green-100 border border-green-200" /> Strong performance (80%+)
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded bg-amber-100 border border-amber-200" /> Partly logged
+                <span className="w-3 h-3 rounded bg-amber-100 border border-amber-200" /> Mixed performance (50–79%)
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded bg-gray-50 border border-dashed border-gray-300" /> Nothing logged
+                <span className="w-3 h-3 rounded bg-red-100 border border-red-200" /> Needs attention (&lt;50%)
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded bg-rose-100 border border-rose-200" /> Skipped
+                <span className="w-3 h-3 rounded bg-slate-100 border border-slate-200" /> Only skipped (neutral)
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded bg-gray-100 border border-gray-200" /> Rest / future
+                <span className="w-3 h-3 rounded bg-gray-50 border border-dashed border-gray-300" /> No outcome / rest / future
               </span>
             </div>
             <p className="text-center text-xs text-gray-400 mt-3">
-              {monthStats.logged} of {monthStats.due} habit-days logged ·{' '}
+              Tile color shows performance; {monthStats.logged} of {monthStats.due} habit-days logged ·{' '}
               <span className="text-red-500">{monthStats.failed} missed</span> · {monthStats.notLogged} not logged
               {monthStats.skipped > 0 ? ` · ${monthStats.skipped} skipped` : ''}
             </p>

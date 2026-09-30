@@ -18,7 +18,7 @@ import {
   getWeekAggregate,
   isHabitScheduledOnDate,
 } from '../utils/scoring';
-import type { DayStatus, Habit, HabitDayState, HabitLog, HabitStatus } from '../types';
+import type { DayStatus, DaySummary, Habit, HabitDayState, HabitLog, HabitStatus } from '../types';
 import {
   formatDateOnly,
   getWeekStart,
@@ -118,6 +118,28 @@ function performanceStyle(score: number): { text: string; bar: string } {
   if (score >= 80) return { text: 'text-green-600 dark:text-green-400', bar: 'bg-green-500' };
   if (score >= 50) return { text: 'text-amber-600 dark:text-amber-400', bar: 'bg-amber-500' };
   return { text: 'text-red-600 dark:text-red-400', bar: 'bg-red-500' };
+}
+
+/** Small day-strip bars use the same outcome performance as the main card. */
+function dayStripBar(summary: DaySummary): string {
+  if (summary.status === 'future') return 'bg-transparent';
+  if (summary.status === 'before_habits' || summary.status === 'no_habits') return 'bg-gray-300 dark:bg-gray-600';
+
+  const scored = summary.done + summary.partial + summary.failed;
+  if (scored > 0) return performanceStyle(summary.qualityPercent).bar;
+  if (summary.skipped > 0 && summary.notLogged === 0) return 'bg-slate-400';
+  return 'bg-gray-300 dark:bg-gray-600';
+}
+
+function dayStripLabel(summary: DaySummary): string {
+  if (summary.status === 'future' || summary.status === 'before_habits' || summary.status === 'no_habits') {
+    return DAY_STATUS_STYLES[summary.status].label;
+  }
+
+  const scored = summary.done + summary.partial + summary.failed;
+  if (scored > 0) return `${summary.qualityPercent}% performance`;
+  if (summary.skipped > 0 && summary.notLogged === 0) return 'only skipped (neutral)';
+  return 'no scored outcomes yet';
 }
 
 interface UndoEntry {
@@ -549,15 +571,13 @@ export default function TodayPage() {
                     ? 'bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 font-semibold'
                     : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400'
                 }`}
-                title={`${format(day, 'PPP')} — ${DAY_STATUS_STYLES[summary.status].label}`}
+                title={`${format(day, 'PPP')} — ${dayStripLabel(summary)}`}
               >
                 <span className="text-xs">{format(day, 'EEE')}</span>
                 <span className={`text-sm ${isDayToday ? 'font-bold' : ''}`}>{format(day, 'd')}</span>
                 <span
                   className={`w-1.5 h-1.5 rounded-full mt-0.5 ${
-                    summary.status === 'future'
-                      ? 'bg-transparent'
-                      : DAY_STATUS_STYLES[summary.status].bar
+                    dayStripBar(summary)
                   }`}
                 />
               </button>
