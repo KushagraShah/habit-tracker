@@ -73,6 +73,8 @@ CREATE TABLE habits (
   success_label TEXT,
   partial_label TEXT,
   fail_label TEXT,
+  -- Small effective-dated label history; avoids a separate criteria table.
+  criteria_history JSONB NOT NULL DEFAULT '[]',
   start_date DATE NOT NULL DEFAULT CURRENT_DATE,
   -- Default far in the future so habits do not silently expire after 30 days.
   end_date DATE NOT NULL DEFAULT (CURRENT_DATE + INTERVAL '10 years'),
@@ -85,7 +87,8 @@ CREATE TABLE habits (
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
-  CONSTRAINT habits_date_range CHECK (end_date >= start_date)
+  CONSTRAINT habits_date_range CHECK (end_date >= start_date),
+  CONSTRAINT habits_criteria_history_array_check CHECK (jsonb_typeof(criteria_history) = 'array')
 );
 
 CREATE INDEX idx_habits_user_id ON habits(user_id);

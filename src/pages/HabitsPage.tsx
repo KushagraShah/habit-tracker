@@ -22,8 +22,16 @@ import type {
   SchedulingType,
 } from '../types';
 import { DAYS_OF_WEEK, EMOJIS, WEEKDAY_LABELS } from '../types';
-import { formatDateOnly, getWeekStart, getWeekEnd, isAfterDateOnly, todayLocal } from '../utils/date';
+import {
+  formatDateOnly,
+  getWeekStart,
+  getWeekEnd,
+  isAfterDateOnly,
+  isBeforeDateOnly,
+  todayLocal,
+} from '../utils/date';
 import { getHabitStats, isHabitEnded, isHabitPausedOnDate, isHabitScheduledOnDate } from '../utils/scoring';
+import { getHabitCriteriaForDate, withCriteriaVersion } from '../utils/criteria';
 
 const DEFAULT_HABIT_YEARS = 1;
 const splitter = new GraphemeSplitter();
@@ -103,6 +111,7 @@ export default function HabitsPage() {
   const [successLabel, setSuccessLabel] = useState('');
   const [partialLabel, setPartialLabel] = useState('');
   const [failLabel, setFailLabel] = useState('');
+  const [criteriaEffectiveDate, setCriteriaEffectiveDate] = useState(formatDateOnly(todayLocal()));
   const [selectedDays, setSelectedDays] = useState<RecurrenceDay[]>([]);
   const [startDate, setStartDate] = useState(formatDateOnly(todayLocal()));
   const [endDate, setEndDate] = useState(getDefaultEndDate());
@@ -119,6 +128,13 @@ export default function HabitsPage() {
   const currentWeekEnd = getWeekEnd(todayDate);
   const todayStr = formatDateOnly(todayDate);
   const todayMinStr = todayStr;
+  const displayedCriteria = editingHabit
+    ? getHabitCriteriaForDate(editingHabit, todayDate)
+    : null;
+  const criteriaChangedInForm = !editingHabit
+    || displayedCriteria?.success_label !== (successLabel.trim() || null)
+    || displayedCriteria?.partial_label !== (partialLabel.trim() || null)
+    || displayedCriteria?.fail_label !== (failLabel.trim() || null);
 
   const loadHabits = useCallback(async () => {
     if (!user) return;
@@ -176,6 +192,7 @@ export default function HabitsPage() {
     setSuccessLabel('');
     setPartialLabel('');
     setFailLabel('');
+    setCriteriaEffectiveDate(formatDateOnly(todayLocal()));
     setSelectedDays([]);
     setStartDate(formatDateOnly(todayLocal()));
     setEndDate(getDefaultEndDate());
@@ -195,9 +212,11 @@ export default function HabitsPage() {
     setShowManualEmojiInput(false);
     setManualEmojiDraft('');
     setManualEmojiHint('');
-    setSuccessLabel(habit.success_label || '');
-    setPartialLabel(habit.partial_label || '');
-    setFailLabel(habit.fail_label || '');
+    const currentCriteria = getHabitCriteriaForDate(habit, todayDate);
+    setSuccessLabel(currentCriteria.success_label || '');
+    setPartialLabel(currentCriteria.partial_label || '');
+    setFailLabel(currentCriteria.fail_label || '');
+    setCriteriaEffectiveDate(todayStr);
     setSelectedDays(habit.recurrence);
     setStartDate(habit.start_date);
     setEndDate(habit.end_date);
@@ -270,6 +289,41 @@ export default function HabitsPage() {
     event.preventDefault();
     if (!user || !validateForm()) return;
 
+    const nextCriteria = {
+      success_label: successLabel.trim() || null,
+      partial_label: partialLabel.trim() || null,
+      fail_label: failLabel.trim() || null,
+    };
+    const currentCriteria = editingHabit
+      ? displayedCriteria
+      : null;
+    const criteriaChanged = !editingHabit
+      || currentCriteria?.success_label !== nextCriteria.success_label
+      || currentCriteria?.partial_label !== nextCriteria.partial_label
+      || currentCriteria?.fail_label !== nextCriteria.fail_label;
+
+    if (editingHabit && criteriaChanged) {
+      if (!criteriaEffectiveDate) {
+        setFormError('Choose when the new criteria should start.');
+        return;
+      }
+      const effectiveDate = new Date(`${criteriaEffectiveDate}T00:00:00`);
+      if (isBeforeDateOnly(effectiveDate, new Date(`${editingHabit.start_date}T00:00:00`))) {
+        setFormError('Criteria effective date cannot be before the habit start date.');
+        return;
+      }
+      if (isAfterDateOnly(effectiveDate, new Date(`${editingHabit.end_date}T00:00:00`))) {
+        setFormError('Criteria effective date cannot be after the habit end date.');
+        return;
+      }
+    }
+
+    const criteriaHistory = editingHabit
+      ? criteriaChanged
+        ? withCriteriaVersion(editingHabit, criteriaEffectiveDate, nextCriteria)
+        : editingHabit.criteria_history ?? []
+      : [{ effective_date: startDate, ...nextCriteria }];
+
     const baseHabitData = {
       title: title.trim(),
       description: description.trim() || null,
@@ -277,9 +331,8 @@ export default function HabitsPage() {
       recurrence: schedulingType === 'fixed_weekdays' ? selectedDays : [],
       scheduling_type: schedulingType,
       weekly_target: schedulingType === 'flexible_weekly' ? weeklyTarget : null,
-      success_label: successLabel.trim() || null,
-      partial_label: partialLabel.trim() || null,
-      fail_label: failLabel.trim() || null,
+      ...nextCriteria,
+      criteria_history: criteriaHistory,
       start_date: startDate,
       end_date: endDate,
       order_index:
@@ -662,12 +715,34 @@ export default function HabitsPage() {
               )}
 
               <div className="border-t border-gray-100 dark:border-gray-700 pt-3">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Button Labels (optional)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Outcome criteria (optional)</label>
+                <p className="text-xs text-gray-400 mb-2">
+                  Describe what counts as Done, Partial, and Missed for this habit.
+                </p>
                 <div className="grid grid-cols-3 gap-2">
-                  <input type="text" value={successLabel} onChange={(event) => setSuccessLabel(event.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-gray-800 dark:text-gray-100" placeholder="Success" />
-                  <input type="text" value={partialLabel} onChange={(event) => setPartialLabel(event.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-gray-800 dark:text-gray-100" placeholder="Partial" />
-                  <input type="text" value={failLabel} onChange={(event) => setFailLabel(event.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-gray-800 dark:text-gray-100" placeholder="Miss" />
+                  <input aria-label="Done criterion" type="text" value={successLabel} onChange={(event) => setSuccessLabel(event.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-gray-800 dark:text-gray-100" placeholder="Done" />
+                  <input aria-label="Partial criterion" type="text" value={partialLabel} onChange={(event) => setPartialLabel(event.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-gray-800 dark:text-gray-100" placeholder="Partial" />
+                  <input aria-label="Missed criterion" type="text" value={failLabel} onChange={(event) => setFailLabel(event.target.value)} className="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-gray-800 dark:text-gray-100" placeholder="Missed" />
                 </div>
+                {editingHabit && criteriaChangedInForm && (
+                  <div className="mt-3 rounded-lg border border-indigo-100 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/30 p-3">
+                    <label className="block text-sm font-medium text-indigo-900 dark:text-indigo-200 mb-1" htmlFor="criteria-effective-date">
+                      Apply these criteria from
+                    </label>
+                    <input
+                      id="criteria-effective-date"
+                      type="date"
+                      min={editingHabit.start_date}
+                      max={editingHabit.end_date}
+                      value={criteriaEffectiveDate}
+                      onChange={(event) => setCriteriaEffectiveDate(event.target.value)}
+                      className="w-full px-3 py-2 border border-indigo-200 dark:border-indigo-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none bg-white dark:bg-gray-800 dark:text-gray-100"
+                    />
+                    <p className="text-xs text-indigo-800 dark:text-indigo-300 mt-2">
+                      Earlier entries keep their existing criteria. This also applies when you backfill an older date.
+                    </p>
+                  </div>
+                )}
               </div>
 
               {formError && <p className="text-sm text-red-500">{formError}</p>}

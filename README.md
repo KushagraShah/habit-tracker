@@ -12,15 +12,16 @@ Built with **React**, **TypeScript**, **Vite**, **Tailwind CSS**, and **Supabase
 - **Backfill without guilt**: a not-logged nudge for recent days, plus a week grid (habits × last 7 days) where one tap cycles a cell through done → partial → skipped → missed → clear.
 - **Fixed weekday habits and "N times per week" habits**, with optional eligible weekdays for the flexible ones.
 - **Focus signals that are readable on a phone**: a 7-day strip and streak per habit, habits sorted worst-first, and a habit-load nudge when your daily load is unrealistic.
-- **Insights tab**: day-by-day month view, this-week breakdown, per-habit month totals, 8-week quality trend.
+- **Insights tab**: day-by-day month view, performance-first weekly/monthly breakdowns, per-habit history, 8-week trend.
+- **Criteria upgrades without rewriting history**: change a target such as `50 min` to `2 h` from a chosen date while older logs keep their original standard.
 - **Pause / resume** (indefinitely or until a date), **JSON export** of all habits and logs, light/dark theme.
 
 ## The scoring model
 
 This is the part that took the most iteration, because the original "points out of due units" number was unintuitive and demotivating.
 
-- **A day is described by how much you logged, not by a grade.** The headline is `4 of 6 logged`, and `not logged` is deliberately tracked separately from `missed`. Forgetting to open the app is not the same as failing a habit, so it does not tank the score.
-- **Two honest numbers instead of one muddy one:** *logged* (coverage — how many due habits you closed out) and *quality* (how well you did with the habits you did log: done = 1, partial = 0.5, missed = 0).
+- **Performance is the headline:** done earns 1 point, partial earns 0.5, and missed earns 0. The main percentage is performance on scored outcomes, so logging every item as missed cannot look green.
+- **Coverage remains useful context:** *logged* means how many due habits you closed out. Not logging is deliberately separate from missing a habit, so forgetting to open the app does not silently become failure.
 - **"N times per week" habits never enter the daily percentage.** They show weekly progress against a target that is only as large as the week allows so far — a 4x/week habit is `1/1 on pace` on Monday, not `0/4`.
 - **Skip is neutral, Missed counts against you.** `skipped` records a deliberate choice; only `fail` is a penalty.
 - **Streaks**: fixed habits count consecutive due days (a partial keeps the engagement streak but breaks the success streak); flexible habits count consecutive completed weeks.
@@ -75,6 +76,7 @@ Run the SQL in this order (Supabase SQL editor):
 
 1. **New project:** run `supabase-migration.sql` once.
 2. **Existing project:** run `supabase-migration-order-rpc-and-skip.sql`. It creates `habits_backup_<date>` / `habit_logs_backup_<date>` snapshots first, then renumbers `order_index`, adds the `unique (user_id, order_index)` guardrail, installs the `move_habit` RPC and allows the `skipped` status. Keep the snapshot tables until you are happy with the result.
+3. **Then run `supabase-migration-criteria-history.sql`** to preserve changing Done / Partial / Miss criteria by effective date. It snapshots `habits`, seeds each existing habit with its current labels from its start date, and adds no new table.
 
 The older `supabase-migration-update.sql` and `supabase-migration-order-index.sql` are kept for history; they are superseded by the file above (the old `order_index` backfill could never match, which is why reordering used to do nothing).
 

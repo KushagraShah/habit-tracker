@@ -107,6 +107,12 @@ const STRIP_COLORS: Record<HabitDayState, string> = {
   not_due: 'bg-gray-100 dark:bg-gray-800',
 };
 
+function performanceTextClass(score: number): string {
+  if (score >= 80) return 'text-green-600 dark:text-green-400';
+  if (score >= 50) return 'text-amber-600 dark:text-amber-400';
+  return 'text-red-600 dark:text-red-400';
+}
+
 export default function InsightsPage() {
   const { user, signupDate } = useAuth();
   const navigate = useNavigate();
@@ -185,7 +191,7 @@ export default function InsightsPage() {
     [habits, logs, trendWeeks, today]
   );
 
-  // Habits needing attention first: lowest logging coverage, then biggest load.
+  // Habits needing attention first: lowest outcome performance, then logging coverage.
   const habitRows = useMemo(
     () =>
       habits
@@ -194,9 +200,15 @@ export default function InsightsPage() {
           stats: getHabitStats(habit, logs, monthStart, monthEnd, today),
         }))
         .filter((row) => row.stats.due > 0)
-        .sort(
-          (a, b) => a.stats.loggingPercent - b.stats.loggingPercent || b.stats.due - a.stats.due
-        ),
+          .sort((a, b) => {
+            const aScored = a.stats.done + a.stats.partial + a.stats.failed;
+            const bScored = b.stats.done + b.stats.partial + b.stats.failed;
+            const aPerformance = aScored > 0 ? a.stats.qualityPercent : 101;
+            const bPerformance = bScored > 0 ? b.stats.qualityPercent : 101;
+            return aPerformance - bPerformance
+              || a.stats.loggingPercent - b.stats.loggingPercent
+              || b.stats.due - a.stats.due;
+          }),
     [habits, logs, monthStart, monthEnd, today]
   );
 
@@ -270,16 +282,20 @@ export default function InsightsPage() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
         <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 p-3">
-          <p className="text-xs text-gray-400">Habit-days logged</p>
-          <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
-            {monthStats.logged}
-            <span className="text-sm text-gray-400 font-normal">/{monthStats.due}</span>
+          <p className="text-xs text-gray-400">Performance</p>
+          <p className={`text-xl font-bold ${
+            monthStats.done + monthStats.partial + monthStats.failed > 0
+              ? performanceTextClass(monthStats.qualityPercent)
+              : 'text-gray-400'
+          }`}>
+            {monthStats.done + monthStats.partial + monthStats.failed > 0 ? `${monthStats.qualityPercent}%` : '—'}
           </p>
         </div>
         <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 p-3">
-          <p className="text-xs text-gray-400">Quality of logged</p>
-          <p className="text-xl font-bold text-gray-700 dark:text-gray-200">
-            {monthStats.qualityPercent}%
+          <p className="text-xs text-gray-400">Logged / scheduled</p>
+          <p className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
+            {monthStats.logged}
+            <span className="text-sm text-gray-400 font-normal">/{monthStats.due}</span>
           </p>
         </div>
         <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-700 p-3">
@@ -394,9 +410,7 @@ export default function InsightsPage() {
         <div className="flex items-end justify-between gap-3">
           <div className="space-y-1">
             <p className="text-sm text-gray-700 dark:text-gray-200">
-              <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                {thisWeek.fixedLogged}
-              </span>
+              <span className="font-semibold text-indigo-600 dark:text-indigo-400">{thisWeek.fixedLogged}</span>
               <span className="text-gray-400">/{thisWeek.fixedDue} scheduled habit-days logged</span>
             </p>
             {thisWeek.flexTargetToDate > 0 && (
@@ -414,10 +428,14 @@ export default function InsightsPage() {
             </p>
           </div>
           <div className="text-right shrink-0">
-            <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
-              {thisWeek.loggingPercent}%
+            <div className={`text-2xl font-bold ${
+              thisWeek.done + thisWeek.partial + thisWeek.failed > 0
+                ? performanceTextClass(thisWeek.qualityPercent)
+                : 'text-gray-400'
+            }`}>
+              {thisWeek.done + thisWeek.partial + thisWeek.failed > 0 ? `${thisWeek.qualityPercent}%` : '—'}
             </div>
-            <div className="text-xs text-gray-400">logged</div>
+            <div className="text-xs text-gray-400">performance</div>
           </div>
         </div>
 
@@ -440,16 +458,15 @@ export default function InsightsPage() {
                       />
                     ))}
                   </span>
-                  <span
-                    className={`w-12 text-right font-medium shrink-0 ${
-                      stats.loggingPercent >= 80
-                        ? 'text-green-600 dark:text-green-400'
-                        : stats.loggingPercent >= 50
-                          ? 'text-amber-600 dark:text-amber-400'
-                          : 'text-gray-400'
-                    }`}
-                  >
-                    {stats.logged}/{stats.due}
+                  <span className="w-16 text-right shrink-0">
+                    <span className={`font-medium ${
+                      stats.done + stats.partial + stats.failed > 0
+                        ? performanceTextClass(stats.qualityPercent)
+                        : 'text-gray-400'
+                    }`}>
+                      {stats.done + stats.partial + stats.failed > 0 ? `${stats.qualityPercent}%` : '—'}
+                    </span>
+                    <span className="block text-[10px] text-gray-400">{stats.logged}/{stats.due} logged</span>
                   </span>
                 </div>
               ))}

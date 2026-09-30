@@ -12,6 +12,8 @@ export interface Habit {
   success_label: string | null;
   partial_label: string | null;
   fail_label: string | null;
+  /** Effective-dated button criteria. Kept on the habit because changes are rare. */
+  criteria_history: HabitCriteriaVersion[] | null;
   start_date: string;
   end_date: string;
   pause_periods: PausePeriod[] | null;
@@ -21,6 +23,14 @@ export interface Habit {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/** Labels/criteria that apply from effective_date onward (local YYYY-MM-DD). */
+export interface HabitCriteriaVersion {
+  effective_date: string;
+  success_label: string | null;
+  partial_label: string | null;
+  fail_label: string | null;
 }
 
 export type RecurrenceDay =

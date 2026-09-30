@@ -27,6 +27,7 @@ import {
   parseDateOnly,
   todayLocal,
 } from '../utils/date';
+import { getStatusLabelForDate } from '../utils/criteria';
 
 const DAYS_IN_STRIP = 7;
 const BACKLOG_DAYS = 7;
@@ -113,11 +114,10 @@ function nextStatus(current: HabitStatus | undefined): HabitStatus | null {
   return index === STATUS_CYCLE.length - 1 ? null : STATUS_CYCLE[index + 1];
 }
 
-function statusLabel(habit: Habit, status: HabitStatus): string {
-  if (status === 'success') return habit.success_label || '✅ Done';
-  if (status === 'partial') return habit.partial_label || '🟡 Partial';
-  if (status === 'skipped') return '⏭ Skip';
-  return habit.fail_label || '✖ Miss';
+function performanceStyle(score: number): { text: string; bar: string } {
+  if (score >= 80) return { text: 'text-green-600 dark:text-green-400', bar: 'bg-green-500' };
+  if (score >= 50) return { text: 'text-amber-600 dark:text-amber-400', bar: 'bg-amber-500' };
+  return { text: 'text-red-600 dark:text-red-400', bar: 'bg-red-500' };
 }
 
 interface UndoEntry {
@@ -251,6 +251,10 @@ export default function TodayPage() {
     () => weekSummary.perHabit.filter((row) => row.isFlexible && row.due > 0),
     [weekSummary]
   );
+
+  const scoredEntries = daySummary.done + daySummary.partial + daySummary.failed;
+  const closedEntries = scoredEntries + daySummary.skipped;
+  const dayPerformance = scoredEntries > 0 ? performanceStyle(daySummary.qualityPercent) : null;
 
   const applyLocalLog = (habitId: string, date: string, next: HabitLog | null) => {
     setLogs((prev) => {
@@ -406,14 +410,14 @@ export default function TodayPage() {
                 key={status}
                 disabled={isFuture || isSaving}
                 onClick={() => handleLogTap(habit, status)}
-                title={isSelected ? 'Tap again to clear' : statusLabel(habit, status)}
+                title={isSelected ? 'Tap again to clear' : getStatusLabelForDate(habit, status, viewDate)}
                 className={`flex-1 min-w-0 px-2 py-3 rounded-lg text-xs font-medium transition-colors min-h-[44px] disabled:cursor-not-allowed disabled:opacity-50 ${
                   isSelected ? meta.active : meta.idle
                 }`}
               >
                 <span className="block truncate">
                   {isSelected ? '✓ ' : ''}
-                  {statusLabel(habit, status)}
+                  {getStatusLabelForDate(habit, status, viewDate)}
                 </span>
               </button>
             );
@@ -608,33 +612,43 @@ export default function TodayPage() {
         </div>
       )}
 
-      {/* Today's numbers, said once */}
+      {/* Performance leads; logging coverage stays visible without masquerading as success. */}
       <div className="bg-white dark:bg-gray-900 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 mb-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <h2 className="text-2xl font-bold text-gray-800 dark:text-gray-100">
-              {daySummary.headline}
+              {scoredEntries > 0
+                ? `${daySummary.qualityPercent}% performance`
+                : daySummary.due > 0
+                  ? `${closedEntries} of ${daySummary.due} closed out`
+                  : daySummary.headline}
             </h2>
             <p className="text-xs text-gray-400 mt-0.5">{daySummary.detail || dayStyles.label}</p>
-            {daySummary.due > 0 && daySummary.qualityPercent > 0 && (
+            {daySummary.due > 0 && (
               <p className="text-xs text-gray-400 mt-0.5">
-                {daySummary.qualityPercent}% quality on what you logged
+                {closedEntries} of {daySummary.due} closed out ({daySummary.loggingPercent}% logged)
               </p>
             )}
           </div>
           {daySummary.due > 0 && (
-            <div className={`text-3xl font-bold shrink-0 ${dayStyles.text}`}>
-              {daySummary.loggingPercent}%
+            <div className={`text-right shrink-0 ${dayPerformance?.text ?? 'text-gray-400'}`}>
+              <div className="text-3xl font-bold">{scoredEntries > 0 ? `${daySummary.qualityPercent}%` : '—'}</div>
+              <div className="text-[11px] font-medium text-gray-400">performance</div>
             </div>
           )}
         </div>
         {daySummary.due > 0 && (
           <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden mt-3">
             <div
-              className={`h-full rounded-full transition-all ${dayStyles.bar}`}
-              style={{ width: `${Math.min(daySummary.loggingPercent, 100)}%` }}
+              className={`h-full rounded-full transition-all ${dayPerformance?.bar ?? 'bg-gray-300 dark:bg-gray-600'}`}
+              style={{ width: `${scoredEntries > 0 ? Math.min(daySummary.qualityPercent, 100) : 0}%` }}
             />
           </div>
+        )}
+        {daySummary.due > 0 && scoredEntries === 0 && !isFuture && (
+          <p className="text-xs text-gray-400 mt-2">
+            No scored outcomes yet — done, partial, and missed determine performance; skipped stays neutral.
+          </p>
         )}
         {isFuture && (
           <p className="text-xs text-gray-400 mt-2">
